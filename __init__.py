@@ -6,10 +6,12 @@ from .modules.coco_noise import noise
 from .modules.coco_rand_int import rand_int
 from .modules.coco_regex_find import regex_find
 from .modules.coco_saver import saver
-from .modules.coco_split_frequencies import split_threebands
+from .modules.coco_split_three import split_threebands
 from .modules.coco_walk_folder import walk_folder
 from .modules.coco_load_exr import load_exr
 from .modules.coco_image_loader import coco_loader
+from .modules.coco_frequency_separation import frequency_separation
+from .modules.coco_frequency_combine import frequency_combine
 
 # Initialize node mappings
 NODE_CLASS_MAPPINGS = {}
@@ -28,7 +30,9 @@ NODE_CLASS_MAPPINGS.update({
     "JSONValueFinderNode": json_value,
     "JSONNode": json,
     "RandomIntNode": rand_int,
-    "RegexFindNode": regex_find
+    "RegexFindNode": regex_find,
+    "frequency_separation": frequency_separation,
+    "frequency_combine": frequency_combine
 })
 
 # Add display names for better UI presentation
@@ -44,12 +48,13 @@ NODE_DISPLAY_NAME_MAPPINGS.update({
     "JSONValueFinderNode": "JSON Value Finder",
     "JSONNode": "JSON Operations",
     "RandomIntNode": "Random Integer",
-    "RegexFindNode": "Regex Find"
+    "RegexFindNode": "Regex Find",
+    "frequency_separation": "Frequency Separation",
+    "frequency_combine": "Frequency Combine"
 })
 
 # Expose what ComfyUI needs
 __all__ = [
     "NODE_CLASS_MAPPINGS",
     "NODE_DISPLAY_NAME_MAPPINGS",
-    "NODE_CATEGORIES"
 ]
