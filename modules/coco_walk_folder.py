@@ -15,7 +15,7 @@ class walk_folder:
     RETURN_TYPES = ("STRING", "STRING")
     RETURN_NAMES = ("file_path", "file_info")
     FUNCTION = "walk_files"
-    CATEGORY = "Coco Tools"
+    CATEGORY = "COCO Tools/File Logistics"
 
     def walk_files(self, folder_path: str, seed: int, file_extension: str) -> Tuple[str, str]:
         # Ensure the folder path exists

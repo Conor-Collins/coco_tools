@@ -35,7 +35,7 @@ class load_exr:
     RETURN_TYPES = ("IMAGE", "MASK", "STRING")
     RETURN_NAMES = ("image", "mask", "metadata")
     FUNCTION = "load_exr_image"
-    CATEGORY = "COCO Tools/loaders"
+    CATEGORY = "COCO Tools/Loaders"
 
     def load_exr_image(
         self, image_path: str, normalize: bool = True, node_id: str = None

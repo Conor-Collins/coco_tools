@@ -20,7 +20,7 @@ class regex_find:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("found_match",)
     FUNCTION = "find_regex_match"
-    CATEGORY = "Coco Tools"
+    CATEGORY = "COCO Tools/String Tools"
 
     def find_regex_match(self, input_string: str, regex_pattern: str) -> Tuple[str]:
         try:

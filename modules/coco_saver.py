@@ -41,7 +41,7 @@ class saver:
     RETURN_TYPES = ()
     FUNCTION = "save_images"
     OUTPUT_NODE = True
-    CATEGORY = "Coco Tools"
+    CATEGORY = "COCO Tools/Savers"
 
     @staticmethod
     def sRGBtoLinear(np_array: np.ndarray) -> np.ndarray:

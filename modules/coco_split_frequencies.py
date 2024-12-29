@@ -16,7 +16,7 @@ class split_frequency_tools:
     RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE")
     RETURN_NAMES = ("Low Frequency Image", "Medium Frequency Image", "High Frequency Image")
     FUNCTION = "split_frequencies"
-    CATEGORY = "COCO Tools/Image Processing"
+    CATEGORY = "COCO Tools/Image Tools"
 
     def gaussian_kernel(self, kernel_size, sigma):
         """Create 2D Gaussian kernel."""

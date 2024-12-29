@@ -19,7 +19,7 @@ class noise:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "apply_noise"
-    CATEGORY = "COCO Tools/Image Processing"
+    CATEGORY = "COCO Tools/Image Tools"
 
     def exclusion_blend(self, img1, img2):
         return img1 + img2 - 2 * torch.mul(img1, img2)
