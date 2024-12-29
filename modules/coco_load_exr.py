@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class EXRLoader:
+class load_exr:
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -107,9 +107,9 @@ class EXRLoader:
 
 
 NODE_CLASS_MAPPINGS = {
-    "exr_loader": EXRLoader
+    "load_exr": load_exr
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "exr_loader": "Load EXR Image"
+    "load_exr": "Load EXR Image"
 }

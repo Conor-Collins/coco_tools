@@ -8,7 +8,8 @@ from .modules.coco_regex_find import regex_find
 from .modules.coco_saver import saver
 from .modules.coco_split_frequencies import split_frequency_tools
 from .modules.coco_walk_folder import walk_folder
-from .modules.coco_loader import image_loader
+from .modules.coco_load_exr import load_exr
+from .modules.coco_image_loader import coco_loader
 
 # Node Categories for better organization
 NODE_CATEGORIES = {
@@ -19,6 +20,7 @@ NODE_CATEGORIES = {
     ],
     "File & Path Management": [
         "CocoImageLoader",
+        "LoadEXRNode", 
         "WalkFolderNode",
         "SaverNode"
     ],
@@ -42,7 +44,8 @@ NODE_CLASS_MAPPINGS.update({
     "ZDepthNode": zdepth,
     "NoiseNode": noise,
     "SplitFrequenciesNode": split_frequency_tools,
-    "image_loader": image_loader,
+    "CocoImageLoader": coco_loader,
+    "LoadEXRNode": load_exr,  
     "WalkFolderNode": walk_folder,
     "SaverNode": saver,
     "JSONReaderNode": JSON_SPEC_READER,
@@ -57,7 +60,8 @@ NODE_DISPLAY_NAME_MAPPINGS.update({
     "ZDepthNode": "Z-Depth Reader",
     "NoiseNode": "Generate Noise",
     "SplitFrequenciesNode": "Split Frequencies",
-    "image_loader": "Image Loader",
+    "CocoImageLoader": "Image Loader (Multi-Format)",
+    "LoadEXRNode": "Load EXR Image",  
     "WalkFolderNode": "Walk Folder",
     "SaverNode": "Save Image",
     "JSONReaderNode": "JSON Reader",

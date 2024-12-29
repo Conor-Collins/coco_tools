@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class RegularImageLoader:
+class coco_loader:
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -129,9 +129,9 @@ class RegularImageLoader:
 
 
 NODE_CLASS_MAPPINGS = {
-    "regular_image_loader": RegularImageLoader
+    "coco_loader": coco_loader
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "regular_image_loader": "Load Regular Image"
+    "coco_loader": "Load Image (supports jpg, png, tif, avif, webp)"
 }
