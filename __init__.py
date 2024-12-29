@@ -6,7 +6,7 @@ from .modules.coco_noise import noise
 from .modules.coco_rand_int import rand_int
 from .modules.coco_regex_find import regex_find
 from .modules.coco_saver import saver
-from .modules.coco_split_frequencies import split_frequency_tools
+from .modules.coco_split_frequencies import split_threebands
 from .modules.coco_walk_folder import walk_folder
 from .modules.coco_load_exr import load_exr
 from .modules.coco_image_loader import coco_loader
@@ -19,7 +19,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {}
 NODE_CLASS_MAPPINGS.update({
     "ZDepthNode": zdepth,
     "NoiseNode": noise,
-    "SplitFrequenciesNode": split_frequency_tools,
+    "split_threebands": split_threebands,
     "CocoImageLoader": coco_loader,
     "LoadEXRNode": load_exr,  
     "WalkFolderNode": walk_folder,
@@ -35,7 +35,7 @@ NODE_CLASS_MAPPINGS.update({
 NODE_DISPLAY_NAME_MAPPINGS.update({
     "ZDepthNode": "Z-Depth Reader",
     "NoiseNode": "Generate Noise",
-    "SplitFrequenciesNode": "Split Frequencies",
+    "split_threebands": "Split into Three Bands",
     "CocoImageLoader": "Image Loader (Multi-Format)",
     "LoadEXRNode": "Load EXR Image",  
     "WalkFolderNode": "Walk Folder",

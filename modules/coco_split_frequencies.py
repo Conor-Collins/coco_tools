@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
-class split_frequency_tools:
+class split_threebands:
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -15,7 +15,7 @@ class split_frequency_tools:
 
     RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE")
     RETURN_NAMES = ("Low Frequency Image", "Medium Frequency Image", "High Frequency Image")
-    FUNCTION = "split_frequencies"
+    FUNCTION = "split_frequencies into 3 bands"
     CATEGORY = "COCO Tools/Image Tools"
 
     def gaussian_kernel(self, kernel_size, sigma):
