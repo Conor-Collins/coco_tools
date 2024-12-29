@@ -16,7 +16,7 @@ class JSON_SPEC_READER:
     RETURN_TYPES = ("INT", "STRING", "STRING", "STRING")
     RETURN_NAMES = ("Seed", "Asset Folder", "Negative Prompt", "Positive Prompt")
     FUNCTION = "read_metadata"
-    CATEGORY = "Coco Tools"
+    CATEGORY = "COCO Tools/JSON Tools"
 
     def read_metadata(self, folder_path):
         metadata_path = os.path.join(folder_path, "metadata.json")

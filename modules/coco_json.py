@@ -17,7 +17,7 @@ class json:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("json_file_path",)
     FUNCTION = "export_to_json"
-    CATEGORY = "Coco Tools"
+    CATEGORY = "COCO Tools/JSON Tools"
     
     def export_to_json(self, positive_prompt, negative_prompt, id_number, seed, output_path):
         try:

@@ -15,7 +15,7 @@ class zdepth:
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("Normalized_Depth_Image",)
     FUNCTION = "load_exr_image"
-    CATEGORY = "Coco Tools"
+    CATEGORY = "COCO Tools/loaders"
 
     def load_exr_image(self, exr_path, min_depth, max_depth):
         try:

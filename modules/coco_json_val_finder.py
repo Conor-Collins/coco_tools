@@ -22,7 +22,7 @@ class json_value:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("value",)
     FUNCTION = "find_key_in_json"
-    CATEGORY = "Coco Tools"
+    CATEGORY = "COCO Tools/JSON Tools"
 
     def find_key_in_json(self, json_directory: str, key_to_find: str) -> Tuple[str]:
         try:
