@@ -1,305 +1,397 @@
-"""
-Extended Image Loader Node for ComfyUI with resize options
-"""
-
 import os
 import logging
 import numpy as np
 import torch
 from PIL import Image, ImageOps
-import OpenEXR
-import Imath
-from typing import Tuple
+import tifffile
 
-# Configure logging
+try:
+    import OpenEXR
+    import Imath
+    OPENEXR_AVAILABLE = True
+except ImportError:
+    OPENEXR_AVAILABLE = False
+
+from typing import Tuple, Optional, Set
+from server import PromptServer
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Add supported image formats validation
+supported_image_extensions: Set[str] = {
+    '.png', '.jpg', '.jpeg', '.webp', '.avif', '.tif', '.tiff', '.exr'
+}
+
+
 class image_loader:
-    """Image loader node with resize options."""
+    MAX_RESOLUTION = 8192
+    MEMORY_WARNING_SIZE = 4096
     
+    # For EXR, we might want to check presence of required channels
+    EXR_REQUIRED_CHANNELS = {'R', 'G', 'B'}  # Minimum required channels
+    EXR_OPTIONAL_CHANNELS = {'A', 'Z'}       # Optional channels
+
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
                 "image_path": ("STRING", {
-                    "default": "",
+                    "default": "path/to/image.png",
                     "description": "Full path to image file"
-                }),
-                "channel_mode": (["RGB", "R", "G", "B", "A", "Z", "Luminance"], {
-                    "default": "RGB",
-                    "description": "Channel selection for EXR images"
                 }),
                 "normalize": ("BOOLEAN", {
                     "default": True,
                     "description": "Normalize image values to 0-1 range"
-                }),
-                "resize_width": ("INT", {
-                    "default": 0,
-                    "min": 0,
-                    "max": 8192,
-                    "description": "Target width (0 for no resize)"
-                }),
-                "resize_height": ("INT", {
-                    "default": 0,
-                    "min": 0,
-                    "max": 8192,
-                    "description": "Target height (0 for no resize)"
-                }),
-                "resize_mode": (["stretch", "crop", "pad"], {
-                    "default": "stretch",
-                    "description": "How to handle aspect ratio differences"
                 })
-            }
+            },
+            "hidden": {"node_id": "UNIQUE_ID"}
         }
 
-    RETURN_TYPES = ("IMAGE", "STRING")
-    RETURN_NAMES = ("image", "metadata")
+    RETURN_TYPES = ("IMAGE", "MASK", "STRING")
+    RETURN_NAMES = ("image", "mask", "metadata")
+
     FUNCTION = "load_image"
     CATEGORY = "image/loaders"
 
-    def normalize_image(self, image: torch.Tensor, min_val: float = 0.0, max_val: float = 1.0) -> torch.Tensor:
-        """Normalize image tensor to specified range."""
+    @staticmethod
+    def process_channel(channel: torch.Tensor) -> torch.Tensor:
+        """
+        Example helper if you want a method that processes a single channel into
+        a 3-channel shape. Currently unused, but you can adapt if you need it.
+        """
+        return channel.unsqueeze(-1).expand(-1, -1, -1, 3)
+
+    @staticmethod
+    def detect_bit_depth(image_path: str, image: Image.Image = None) -> dict:
+        """
+        Detect bit depth from PIL image or from path if 'image' not provided.
+        Returns a dict with keys: bit_depth, mode, format
+        """
+        mode_to_bit_depth = {
+            "1": 1,     # binary
+            "L": 8,     # grayscale
+            "P": 8,     # palette
+            "RGB": 8,   # RGB
+            "RGBA": 8,  # RGBA
+            "I;16": 16, # 16-bit integer
+            "I": 32,    # 32-bit signed integer
+            "F": 32     # 32-bit float
+        }
+
+        # Open a temporary PIL image if not provided
+        if image is None:
+            with Image.open(image_path) as img:
+                mode = img.mode
+                fmt = img.format
+        else:
+            mode = image.mode
+            fmt = image.format
+
+        bit_depth = mode_to_bit_depth.get(mode, 8)
+
+        return {
+            "bit_depth": bit_depth,
+            "mode": mode,
+            "format": fmt
+        }
+
+    @staticmethod
+    def pil2tensor(image: Image.Image, bit_depth: int) -> torch.Tensor:
+        """
+        Convert a PIL Image to a normalized PyTorch tensor.
+        """
+        image_np = np.array(image)
+        if bit_depth == 8:
+            image_tensor = torch.from_numpy(image_np.astype(np.float32) / 255.0)
+        elif bit_depth == 16:
+            image_tensor = torch.from_numpy(image_np.astype(np.float32) / 65535.0)
+        elif bit_depth == 32:
+            # Already float, but we can ensure float32
+            image_tensor = torch.from_numpy(image_np.astype(np.float32))
+        else:
+            logger.warning(f"Unsupported bit depth: {bit_depth}. Defaulting to 8-bit normalization.")
+            image_tensor = torch.from_numpy(image_np.astype(np.float32) / 255.0)
+        
+        # Add batch dimension if not present
+        if len(image_tensor.shape) == 3:
+            image_tensor = image_tensor.unsqueeze(0)
+            
+        return image_tensor
+
+    def check_dimensions(self, width: int, height: int, node_id: str) -> None:
+        """
+        Check image dimensions and send warnings if necessary.
+        """
+        if width > self.MAX_RESOLUTION or height > self.MAX_RESOLUTION:
+            msg = (
+                f"Image dimensions ({width}x{height}) exceed "
+                f"maximum allowed size of {self.MAX_RESOLUTION}"
+            )
+            PromptServer.instance.send_sync("image_loader_warning", {
+                "node_id": node_id,
+                "message": msg
+            })
+            
+        if width > self.MEMORY_WARNING_SIZE or height > self.MEMORY_WARNING_SIZE:
+            msg = (
+                f"Large image detected ({width}x{height}). "
+                "This may consume significant memory."
+            )
+            PromptServer.instance.send_sync("image_loader_warning", {
+                "node_id": node_id,
+                "message": msg
+            })
+
+    def normalize_image(self, image: torch.Tensor,
+                        min_val: float = 0.0, max_val: float = 1.0) -> torch.Tensor:
+        """
+        Normalize an image tensor into the specified range [min_val, max_val].
+        """
         if image is None:
             raise ValueError("Input image cannot be None")
         
         min_current = torch.min(image)
         max_current = torch.max(image)
         
+        # Edge case for constant images
         if min_current == max_current:
             return torch.full_like(image, min_val)
         
+        # Normalize
         normalized = (image - min_current) / (max_current - min_current)
         scaled = normalized * (max_val - min_val) + min_val
-        
         return scaled
 
-    def resize_tensor(self, tensor: torch.Tensor, width: int, height: int, mode: str) -> torch.Tensor:
-        """Resize image tensor using specified mode."""
-        if width <= 0 or height <= 0:
-            return tensor
-        
-        # Get current dimensions
-        c, h, w = tensor.shape
-        
-        if mode == "stretch":
-            # Simple resize
-            resized = torch.nn.functional.interpolate(
-                tensor.unsqueeze(0),
-                size=(height, width),
-                mode='bilinear',
-                align_corners=False
-            ).squeeze(0)
-            
-        elif mode == "crop":
-            # Calculate resize to maintain aspect ratio while ensuring image is large enough
-            target_ratio = width / height
-            current_ratio = w / h
-            
-            if current_ratio > target_ratio:
-                # Image is wider than target
-                resize_height = height
-                resize_width = int(height * current_ratio)
-            else:
-                # Image is taller than target
-                resize_width = width
-                resize_height = int(width / current_ratio)
-            
-            # Resize first
-            resized = torch.nn.functional.interpolate(
-                tensor.unsqueeze(0),
-                size=(resize_height, resize_width),
-                mode='bilinear',
-                align_corners=False
-            ).squeeze(0)
-            
-            # Then crop
-            start_y = (resize_height - height) // 2
-            start_x = (resize_width - width) // 2
-            resized = resized[:, start_y:start_y+height, start_x:start_x+width]
-            
-        else:  # pad
-            # Calculate resize to maintain aspect ratio while fitting within target
-            target_ratio = width / height
-            current_ratio = w / h
-            
-            if current_ratio > target_ratio:
-                # Image is wider than target ratio
-                resize_width = width
-                resize_height = int(width / current_ratio)
-            else:
-                # Image is taller than target ratio
-                resize_height = height
-                resize_width = int(height * current_ratio)
-            
-            # Resize first
-            resized = torch.nn.functional.interpolate(
-                tensor.unsqueeze(0),
-                size=(resize_height, resize_width),
-                mode='bilinear',
-                align_corners=False
-            ).squeeze(0)
-            
-            # Create padding tensor
-            padded = torch.zeros(c, height, width)
-            
-            # Calculate padding
-            pad_y = (height - resize_height) // 2
-            pad_x = (width - resize_width) // 2
-            
-            # Place resized image in center
-            padded[:, pad_y:pad_y+resize_height, pad_x:pad_x+resize_width] = resized
-            
-            resized = padded
-        
-        return resized
-
-    def load_exr_channels(self, exr_path: str, channel_mode: str) -> torch.Tensor:
-        """Load specific channels from EXR file."""
-        if not OpenEXR.isOpenExrFile(exr_path):
-            raise ValueError(f"Invalid EXR file: {exr_path}")
-        
-        exr_file = OpenEXR.InputFile(exr_path)
-        header = exr_file.header()
-        dw = header['dataWindow']
-        size = (dw.max.x - dw.min.x + 1, dw.max.y - dw.min.y + 1)
-        
-        pt = Imath.PixelType(Imath.PixelType.FLOAT)
-        
-        # Determine channels based on mode
-        if channel_mode == "RGB":
-            channels = ['R', 'G', 'B']
-        elif channel_mode in ["R", "G", "B", "A"]:
-            channels = [channel_mode]
-        elif channel_mode == "Z":
-            channels = ['Z']
-        elif channel_mode == "Luminance":
-            channels = ['R', 'G', 'B']
-        
-        channel_data = []
-        for channel in channels:
-            try:
-                data = np.frombuffer(exr_file.channel(channel, pt), dtype=np.float32)
-                channel_data.append(data.reshape(size[1], size[0]))
-            except Exception as e:
-                logger.warning(f"Could not read channel {channel}: {e}")
-        
-        if not channel_data:
-            raise ValueError("No valid channels found")
-        
-        # Handle luminance conversion
-        if channel_mode == "Luminance" and len(channel_data) == 3:
-            rgb = np.stack(channel_data, axis=-1)
-            luminance = 0.299 * rgb[..., 0] + 0.587 * rgb[..., 1] + 0.114 * rgb[..., 2]
-            channel_data = [luminance]
-        
-        # Stack channels and convert to tensor
-        if len(channel_data) == 1:
-            # Single channel - expand to 3 channels for RGB
-            image_array = np.stack([channel_data[0]]*3, axis=-1)
-        else:
-            image_array = np.stack(channel_data, axis=-1)
-        
-        # Convert to tensor and ensure [B,H,W,C] format
-        image_tensor = torch.from_numpy(image_array).float()
-        image_tensor = image_tensor.unsqueeze(0)  # Add batch dimension
-        
-        return image_tensor
-
-    def load_regular_image(self, path: str) -> torch.Tensor:
-        """Load regular image formats (PNG, JPG, etc.)."""
-        image = Image.open(path)
-        image = ImageOps.exif_transpose(image)  # Handle EXIF orientation
-        
-        # Convert to RGB if needed
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
-        
-        # Convert to numpy array and normalize
-        image_np = np.array(image).astype(np.float32) / 255.0
-        
-        # Convert to tensor
-        image_tensor = torch.from_numpy(image_np)
-        
-        # ComfyUI expects [B,H,W,C] format
-        # PIL/numpy gives us [H,W,C], so we need to add batch dimension
-        if len(image_tensor.shape) == 3:  # [H,W,C]
-            image_tensor = image_tensor.unsqueeze(0)  # Add batch dimension -> [1,H,W,C]
-        elif len(image_tensor.shape) == 2:  # [H,W]
-            image_tensor = image_tensor.unsqueeze(0).unsqueeze(-1)  # Add batch and channel -> [1,H,W,1]
-            
-        return image_tensor
-
-    def load_image(
-        self,
-        image_path: str,
-        channel_mode: str = "RGB",
-        normalize: bool = True,
-        resize_width: int = 0,
-        resize_height: int = 0,
-        resize_mode: str = "stretch"
-        ) -> Tuple[torch.Tensor, str]:
-
-        """Main loading function that handles all image loading scenarios."""
-        
+    def load_regular_image(self, path: str, node_id: str) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Load PNG/JPG/WEBP/AVIF etc. via PIL, handle exif transpose, alpha -> mask, etc.
+        """
         try:
-            # Validate path
-            if not os.path.isfile(image_path):
-                raise ValueError(f"Invalid file path: {image_path}")
-            
-            # Load image based on format
-            if image_path.lower().endswith('.exr'):
-                image = self.load_exr_channels(image_path, channel_mode)
+            with Image.open(path) as pil_img:
+                pil_img = ImageOps.exif_transpose(pil_img)
+
+                # Check dimensions
+                self.check_dimensions(pil_img.width, pil_img.height, node_id)
+
+                # If alpha present, separate it out
+                has_alpha = pil_img.mode in ('RGBA', 'LA')
+                if has_alpha:
+                    if pil_img.mode == 'RGBA':
+                        rgb_image = pil_img.convert('RGB')
+                        alpha = pil_img.split()[3]
+                    else:  # LA mode
+                        rgb_image = pil_img.convert('RGB')
+                        alpha = pil_img.split()[1]
+                else:
+                    rgb_image = pil_img.convert('RGB')
+                    alpha = None
+
+                # Determine bit depth from the converted (RGB) image
+                info = self.detect_bit_depth(path, rgb_image)
+                bit_depth = info['bit_depth']
+
+                # Convert RGB to tensor
+                rgb_tensor = self.pil2tensor(rgb_image, bit_depth)
+                
+                # Create mask tensor
+                if alpha is not None:
+                    mask_tensor = self.pil2tensor(alpha, bit_depth)
+                    # Ensure mask is [B,H,W,1]
+                    if len(mask_tensor.shape) == 3:
+                        mask_tensor = mask_tensor.unsqueeze(-1)
+                else:
+                    # If no alpha, make a mask of all 1s
+                    mask_tensor = torch.ones_like(rgb_tensor[:, :, :, :1])
+
+                return rgb_tensor, mask_tensor
+
+        except Exception as e:
+            logger.error(f"Error loading regular image: {str(e)}")
+            raise
+
+    def load_exr_channels(self, exr_path: str, node_id: str) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Load an EXR file’s channels into a PyTorch tensor. Returns (RGB, alpha).
+        """
+        if not OPENEXR_AVAILABLE:
+            raise ImportError("OpenEXR or Imath not installed. Cannot load EXR.")
+
+        exr_file = None
+        try:
+            exr_file = OpenEXR.InputFile(exr_path)
+            header = exr_file.header()
+
+            # Check channels
+            channels_available = set(header['channels'].keys())
+            missing = self.EXR_REQUIRED_CHANNELS - channels_available
+            if missing:
+                raise ValueError(
+                    f"EXR missing one or more required channels {missing}. "
+                    f"Available channels: {channels_available}"
+                )
+
+            dw = header['dataWindow']
+            width = dw.max.x - dw.min.x + 1
+            height = dw.max.y - dw.min.y + 1
+
+            self.check_dimensions(width, height, node_id)
+
+            pt = Imath.PixelType(Imath.PixelType.FLOAT)
+
+            # Read RGB
+            rgb_data = []
+            for c in ['R', 'G', 'B']:
+                channel_data = np.frombuffer(exr_file.channel(c, pt), dtype=np.float32)
+                rgb_data.append(channel_data.reshape(height, width))
+
+            # Stack into [H, W, 3]
+            rgb_tensor = torch.from_numpy(np.stack(rgb_data, axis=-1)).unsqueeze(0)
+
+            # Alpha channel if present
+            if 'A' in channels_available:
+                alpha_data = np.frombuffer(exr_file.channel('A', pt), dtype=np.float32)
+                alpha_tensor = torch.from_numpy(alpha_data.reshape(height, width)).unsqueeze(0).unsqueeze(-1)
             else:
-                image = self.load_regular_image(image_path)
-            
+                alpha_tensor = torch.ones_like(rgb_tensor[:, :, :, :1])
+
+            return rgb_tensor, alpha_tensor
+
+        finally:
+            if exr_file is not None:
+                exr_file.close()
+
+    def load_tiff(self, path: str, node_id: str) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Load a TIFF image with tifffile, handle alpha if present.
+        """
+        try:
+            with tifffile.TiffFile(path) as tiff:
+                page = tiff.pages[0]
+                image_data = page.asarray()
+
+                height, width = image_data.shape[:2]
+                self.check_dimensions(width, height, node_id)
+
+                # Normalize by dtype
+                dtype = image_data.dtype
+                if dtype == np.uint8:
+                    image_data = image_data.astype(np.float32) / 255.0
+                elif dtype == np.uint16:
+                    image_data = image_data.astype(np.float32) / 65535.0
+                elif dtype in (np.float32, np.float64):
+                    image_data = image_data.astype(np.float32)
+                else:
+                    logger.warning(f"Unknown TIFF dtype {dtype}. Will attempt float32 cast / 255.")
+                    image_data = image_data.astype(np.float32) / 255.0
+
+                # Handle channel dimension
+                if len(image_data.shape) == 2:
+                    # Grayscale, replicate to 3 channels
+                    image_data = np.stack([image_data] * 3, axis=-1)
+                    mask_data = np.ones((height, width, 1), dtype=np.float32)
+                else:
+                    # shape => [H, W, channels]
+                    channels = image_data.shape[2]
+                    if channels >= 4:
+                        # alpha is last channel
+                        mask_data = image_data[..., 3:4]
+                        image_data = image_data[..., :3]
+                    else:
+                        # no alpha
+                        mask_data = np.ones((height, width, 1), dtype=np.float32)
+
+                rgb_tensor = torch.from_numpy(image_data).unsqueeze(0)
+                mask_tensor = torch.from_numpy(mask_data).unsqueeze(0)
+
+                return rgb_tensor, mask_tensor
+
+        except Exception as e:
+            logger.error(f"Error loading TIFF: {str(e)}")
+            raise
+
+    def load_image(self,
+                   image_path: str,
+                   normalize: bool = True,
+                   node_id: str = None
+                   ) -> Tuple[torch.Tensor, torch.Tensor, str]:
+        """
+        Main loading function that routes to the appropriate loader 
+        based on file extension. 
+        """
+        if not os.path.exists(image_path):
+            msg = f"File not found: {image_path}"
+            logger.error(msg)
+            if node_id:
+                PromptServer.instance.send_sync("image_loader_error", {
+                    "node_id": node_id,
+                    "message": msg
+                })
+            raise FileNotFoundError(msg)
+
+        # Optional check for supported extensions
+        ext = os.path.splitext(image_path)[1].lower()
+        if ext not in supported_image_extensions:
+            msg = f"Unsupported image format: {ext}"
+            logger.error(msg)
+            if node_id:
+                PromptServer.instance.send_sync("image_loader_error", {
+                    "node_id": node_id,
+                    "message": msg
+                })
+            raise ValueError(msg)
+
+        try:
+            if ext == '.exr':
+                rgb_tensor, mask_tensor = self.load_exr_channels(image_path, node_id)
+            elif ext in {'.tif', '.tiff'}:
+                rgb_tensor, mask_tensor = self.load_tiff(image_path, node_id)
+            else:
+                rgb_tensor, mask_tensor = self.load_regular_image(image_path, node_id)
+
+            # Normalize if requested
             if normalize:
-                image = self.normalize_image(image)
-            
-            # Handle resizing
-            if resize_width > 0 and resize_height > 0:
-                image = self.resize_tensor(image, resize_width, resize_height, resize_mode)
-            
-            # Ensure we have a batch dimension and correct channel order
-            if len(image.shape) == 3:
-                image = image.unsqueeze(0)  # Add batch dimension if not present
-            
-            # Double check tensor shape
-            if len(image.shape) != 4:
-                raise ValueError(f"Invalid image tensor shape: {image.shape}")
-            
-            # Ensure float32 type
-            image = image.float()
-            
+                rgb_tensor = self.normalize_image(rgb_tensor)
+                mask_tensor = self.normalize_image(mask_tensor)
+
             # Prepare metadata
             metadata = {
                 "file_path": image_path,
-                "channel_mode": channel_mode,
-                "image_size": image.shape,
-                "resize_mode": resize_mode if resize_width > 0 and resize_height > 0 else "none"
+                "tensor_shape": tuple(rgb_tensor.shape),
+                "format": ext
             }
-            
-            return (image, str(metadata))
-        
+            # Return everything as strings or Tensors
+            return (rgb_tensor, mask_tensor, str(metadata))
+
         except Exception as e:
-            logger.error(f"Error loading image: {e}")
+            logger.error(f"Error loading image: {str(e)}")
+            if node_id:
+                PromptServer.instance.send_sync("image_loader_error", {
+                    "node_id": node_id,
+                    "message": f"Error loading image: {str(e)}"
+                })
             raise
 
     @classmethod
     def IS_CHANGED(cls, *args, **kwargs) -> float:
-        """Check if the image file has been modified."""
+        """
+        Check if the file changed. Return NaN if not found or error. 
+        Otherwise return last modification time as float, so Comfy can 
+        decide if node needs re-execution.
+        """
         try:
             image_path = kwargs.get('image_path', '')
             if not os.path.isfile(image_path):
-                return float("nan")
+                return float('nan')
             return os.path.getmtime(image_path)
         except:
-            return float("nan")
+            return float('nan')
+
 
 NODE_CLASS_MAPPINGS = {
     "image_loader": image_loader
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "image_loader": "Load Image (Extended)"
+    "image_loader": "Load Image (multi-file-type)"
 }
