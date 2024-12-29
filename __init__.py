@@ -11,30 +11,6 @@ from .modules.coco_walk_folder import walk_folder
 from .modules.coco_load_exr import load_exr
 from .modules.coco_image_loader import coco_loader
 
-# Node Categories for better organization
-NODE_CATEGORIES = {
-    "Image Processing": [
-        "ZDepthNode",
-        "NoiseNode",
-        "SplitFrequenciesNode"
-    ],
-    "File & Path Management": [
-        "CocoImageLoader",
-        "LoadEXRNode", 
-        "WalkFolderNode",
-        "SaverNode"
-    ],
-    "JSON Specs": [
-        "JSONReaderNode",
-        "JSONValueFinderNode",
-        "JSONNode"
-    ],
-    "Utility Nodes": [
-        "RandomIntNode",
-        "RegexFindNode"
-    ]
-}
-
 # Initialize node mappings
 NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}

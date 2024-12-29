@@ -29,7 +29,7 @@ class coco_loader:
     RETURN_TYPES = ("IMAGE", "MASK", "STRING")
     RETURN_NAMES = ("image", "mask", "metadata")
     FUNCTION = "load_regular_image"
-    CATEGORY = "image/loaders"
+    CATEGORY = "COCO Tools/loaders"
 
     def load_regular_image(
         self, image_path: str, normalize: bool = True, node_id: str = None
