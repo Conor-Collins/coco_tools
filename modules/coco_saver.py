@@ -1,7 +1,7 @@
 import os
 import torch
 import numpy as np
-import imageio
+import tifffile
 import folder_paths
 from typing import Dict, List, Tuple, Union
 
@@ -9,6 +9,11 @@ os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 import cv2 as cv
 
 class saver:
+    """
+    Enhanced image saving node that combines features from Saver and SaveAll nodes.
+    Includes improved color space handling, better grayscale detection, and optimized file handling.
+    """
+    
     def __init__(self):
         self.output_dir = folder_paths.get_output_directory()
         self.type = "output"
@@ -38,14 +43,45 @@ class saver:
     OUTPUT_NODE = True
     CATEGORY = "Coco Tools"
 
+    @staticmethod
+    def sRGBtoLinear(np_array: np.ndarray) -> np.ndarray:
+        """Improved sRGB to Linear conversion."""
+        mask = np_array <= 0.0404482362771082
+        result = np_array.copy()  # Create a copy to avoid modifying the input
+        result[mask] = result[mask] / 12.92
+        result[~mask] = np.power((result[~mask] + 0.055) / 1.055, 2.4)
+        return result
+
+    @staticmethod
+    def linearToSRGB(np_array: np.ndarray) -> np.ndarray:
+        """Improved Linear to sRGB conversion."""
+        mask = np_array <= 0.0031308
+        result = np_array.copy()  # Create a copy to avoid modifying the input
+        result[mask] = result[mask] * 12.92
+        result[~mask] = np.power(result[~mask], 1/2.4) * 1.055 - 0.055
+        return result
+
+    @staticmethod
+    def is_grayscale(image: np.ndarray) -> bool:
+        """
+        Check if an RGB image is effectively grayscale.
+        Args:
+            image: Input image array with shape (H, W, C)
+        Returns:
+            bool: True if image is grayscale
+        """
+        if image.shape[2] == 3:
+            return np.allclose(image[..., 0], image[..., 1]) and np.allclose(image[..., 1], image[..., 2])
+        return False
+
     def _validate_format_bitdepth(self, file_type: str, bit_depth: int) -> Tuple[str, int]:
         """Validates and adjusts file format and bit depth compatibility."""
         format_depth_limits = {
-            "png": (8, 32),
+            "png": (8, 16),
             "jpg": (8, 8),
             "jpeg": (8, 8),
             "webp": (8, 8),
-            "tiff": (8, 16),
+            "tiff": (8, 32),
             "exr": (16, 32)
         }
         
@@ -57,14 +93,26 @@ class saver:
         
         return file_type, adjusted_depth
 
-    def _get_file_extension(self, file_type: str) -> str:
-        """Returns the appropriate file extension with dot."""
-        return f".{file_type}"
+    def increment_filename(self, filepath: str) -> str:
+        """
+        Enhanced filename increment method that handles both versioning and duplicates.
+        Args:
+            filepath: Base filepath without extension
+        Returns:
+            str: Unique filepath
+        """
+        base, ext = os.path.splitext(filepath)
+        counter = 1
+        new_filepath = f"{base}_{counter:05d}{ext}"
+        while os.path.exists(new_filepath):
+            counter += 1
+            new_filepath = f"{base}_{counter:05d}{ext}"
+        return new_filepath
 
     def _convert_bit_depth(self, img: np.ndarray, bit_depth: int, sRGB_to_linear: bool) -> np.ndarray:
-        """Converts image to specified bit depth with optional sRGB to linear conversion."""
-        if sRGB_to_linear and bit_depth != 32:
-            img = image_utils.sRGBtoLinear(img)
+        """Enhanced bit depth conversion with improved color space handling."""
+        if sRGB_to_linear:
+            img = self.sRGBtoLinear(img)
 
         if bit_depth == 8:
             return (np.clip(img, 0, 1) * 255).astype(np.uint8)
@@ -73,27 +121,38 @@ class saver:
         else:  # 32-bit
             return img.astype(np.float32)
 
-    def _prepare_exr_image(self, img: np.ndarray) -> np.ndarray:
-        """Prepares image specifically for EXR format."""
-        # Convert RGB to BGR for OpenCV
-        if img.shape[-1] >= 3:
-            bgr = img.copy()
-            bgr[..., 0] = img[..., 2]
-            bgr[..., 2] = img[..., 0]
-            
-            # Handle alpha channel if present
-            if img.shape[-1] == 4:
-                bgr[..., 3] = np.clip(1 - img[..., 3], 0, 1)
-            return bgr
+    def _prepare_image_for_saving(self, img: np.ndarray, file_type: str) -> np.ndarray:
+        """Prepare image for saving with format-specific handling."""
+        if self.is_grayscale(img) and img.shape[2] == 3:
+            # Convert RGB grayscale to actual grayscale
+            img = img[..., 0:1]
+        
+        if file_type == "exr":
+            if img.shape[-1] >= 3:
+                # Convert RGB to BGR for OpenCV
+                bgr = img.copy()
+                bgr[..., 0] = img[..., 2]
+                bgr[..., 2] = img[..., 0]
+                if img.shape[-1] == 4:  # Handle alpha
+                    bgr[..., 3] = np.clip(1 - img[..., 3], 0, 1)
+                return bgr
+        else:
+            # For non-EXR formats, convert to BGR if needed
+            if img.shape[-1] >= 3:
+                return cv.cvtColor(img, cv.COLOR_RGB2BGR)
+        
         return img
 
     def save_images(self, images: torch.Tensor, file_path: str, file_type: str, bit_depth: str,
                    quality: int = 95, sRGB_to_linear: bool = True, version: int = 1,
                    start_frame: int = 1001, frame_pad: int = 4, prompt=None, extra_pnginfo=None) -> Dict:
+        """
+        Enhanced save_images function with improved error handling and file management.
+        """
         try:
             bit_depth = int(bit_depth)
             file_type, bit_depth = self._validate_format_bitdepth(file_type.lower(), bit_depth)
-            file_ext = self._get_file_extension(file_type)
+            file_ext = f".{file_type}"
 
             # Handle absolute vs relative paths
             if not os.path.isabs(file_path):
@@ -120,35 +179,53 @@ class saver:
                 # Generate output filename
                 frame_num = f".{str(start_frame + i).zfill(frame_pad)}" if file_type == "exr" else f"_{i:05d}"
                 out_path = f"{base_path}{version_str}{frame_num}{file_ext}"
-
-                # Avoid overwriting existing files
+                
+                # Use improved filename increment if file exists
                 if os.path.exists(out_path):
-                    counter = 1
-                    while os.path.exists(f"{base_path}{version_str}{frame_num}_{counter}{file_ext}"):
-                        counter += 1
-                    out_path = f"{base_path}{version_str}{frame_num}_{counter}{file_ext}"
+                    out_path = self.increment_filename(out_path)
 
-                # Convert bit depth and color space
+                # Convert bit depth and prepare for saving
                 img_np = self._convert_bit_depth(img_np, bit_depth, sRGB_to_linear)
+                img_np = self._prepare_image_for_saving(img_np, file_type)
 
                 # Save the image based on format
                 if file_type == "exr":
-                    img_np = self._prepare_exr_image(img_np)
                     cv.imwrite(out_path, img_np)
                 elif file_type in ["jpg", "jpeg", "webp"]:
-                    img_np = cv.cvtColor(img_np, cv.COLOR_RGB2BGR)
                     cv.imwrite(out_path, img_np, [cv.IMWRITE_JPEG_QUALITY, quality])
                 elif file_type == "png":
-                    if bit_depth == 32:
-                        # For 32-bit PNG, we need to handle it specially with proper flags
-                        cv.imwrite(out_path, cv.cvtColor(img_np, cv.COLOR_RGB2BGR), [cv.IMWRITE_PNG_COMPRESSION, 9])
+                    if bit_depth == 16:
+                        cv.imwrite(out_path, img_np, [cv.IMWRITE_PNG_COMPRESSION, 9])
                     else:
-                        cv.imwrite(out_path, cv.cvtColor(img_np, cv.COLOR_RGB2BGR))
+                        cv.imwrite(out_path, img_np)
                 elif file_type == "tiff":
-                    imageio.imwrite(out_path, img_np)
+                    # Handle TIFF saving with appropriate bit depth
+                    if bit_depth == 8:
+                        tifffile.imwrite(out_path, img_np, photometric='rgb')
+                    elif bit_depth == 16:
+                        tifffile.imwrite(out_path, img_np, photometric='rgb')
+                    else:  # 32-bit
+                        # For 32-bit, we keep the float values and save with appropriate metadata
+                        tifffile.imwrite(
+                            out_path,
+                            img_np,
+                            photometric='rgb',
+                            dtype=np.float32,
+                            metadata={'bit_depth': 32}
+                        )
 
             return {"ui": {"images": []}}
 
         except Exception as e:
             print(f"Error saving images: {e}")
             return {"ui": {"error": str(e)}}
+
+# Register the node
+NODE_CLASS_MAPPINGS = {
+    "saver": saver,
+}
+
+# Optional: Register display names
+NODE_DISPLAY_NAME_MAPPINGS = {
+    "saver": "Image Saver"
+}
