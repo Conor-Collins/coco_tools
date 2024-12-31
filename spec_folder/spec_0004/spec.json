@@ -1,0 +1,5 @@
+{
+  "positive_prompt": "A high key product photo in golden hour glow of a beauty product container with the word Pluto on the label in a 1970s NASA control room, highly detailed, 8k resolution, conde nast, lvmh",
+  "negative_prompt": "blur, blurry, oversaturated, overexposed, low quality, jpeg artifacts",
+  "seed": 547444651
+}

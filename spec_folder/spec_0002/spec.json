@@ -1,0 +1,5 @@
+{
+  "positive_prompt": "A normcore product photo in harsh direct sunlight of a beauty product container with the word Atlas on the label in a 1920s Paris caf\u00e9 terrace, highly detailed, 8k resolution, conde nast, lvmh",
+  "negative_prompt": "oversaturated, overexposed, blur, blurry, deformed, distorted",
+  "seed": 405233247
+}

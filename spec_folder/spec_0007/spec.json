@@ -1,0 +1,5 @@
+{
+  "positive_prompt": "A normcore product photo in dappled dramatic lighting of a beauty product container with the word Pluto on the label in a Blade Runner-esque neon-soaked megacity, highly detailed, 8k resolution, conde nast, lvmh",
+  "negative_prompt": "blur, blurry, oversaturated, overexposed, deformed, distorted",
+  "seed": 342261148
+}

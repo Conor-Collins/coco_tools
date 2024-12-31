@@ -1,0 +1,5 @@
+{
+  "positive_prompt": "A dark moody product photo in ambient occlusion lighting of a beauty product container with the word Helios on the label in a Jungle setting, highly detailed, 8k resolution, conde nast, lvmh",
+  "negative_prompt": "oversaturated, overexposed, deformed, distorted, blur, blurry",
+  "seed": 525657621
+}
