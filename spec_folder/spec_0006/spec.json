@@ -1,5 +1,5 @@
 {
-  "positive_prompt": "A dark moody product photo in dramatic rim light of a beauty product container with the word Chronos on the label in a Ancient Roman bathhouse ruins, highly detailed, 8k resolution, conde nast, lvmh",
-  "negative_prompt": "oversaturated, overexposed, deformed, distorted, blur, blurry",
-  "seed": 45684689
+  "positive": "A film noir style product photo in dramatic rim light of a beauty product container with the word Hades on the label in a Blade Runner-esque neon-soaked megacity, highly detailed, 8k resolution, conde nast, lvmh",
+  "negative": "blur, blurry, oversaturated, overexposed, low quality, jpeg artifacts",
+  "seed": 650814328
 }

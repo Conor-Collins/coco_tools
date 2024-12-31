@@ -1,5 +1,5 @@
 {
-  "positive_prompt": "A punk aesthetic product photo in dramatic rim light of a beauty product container with the word Nyx on the label in a Moroccan riad with filtered sunlight, highly detailed, 8k resolution, conde nast, lvmh",
-  "negative_prompt": "low quality, jpeg artifacts, blur, blurry, deformed, distorted",
-  "seed": 436096399
+  "positive": "A soft focus product photo in moody low key of a beauty product container with the word Nyx on the label in a Renaissance artist's workshop, highly detailed, 8k resolution, conde nast, lvmh",
+  "negative": "oversaturated, overexposed, blur, blurry, low quality, jpeg artifacts",
+  "seed": 278055514
 }

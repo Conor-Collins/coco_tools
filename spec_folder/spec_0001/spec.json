@@ -1,5 +1,5 @@
 {
-  "positive_prompt": "A vintage film grain product photo in ethereal backlight of a beauty product container with the word Nyx on the label in a Soviet Constructivist factory, highly detailed, 8k resolution, conde nast, lvmh",
-  "negative_prompt": "blur, blurry, low quality, jpeg artifacts, deformed, distorted",
-  "seed": 499003763
+  "positive": "A punk aesthetic product photo in moody low key of a beauty product container with the word Hades on the label in a Blade Runner-esque neon-soaked megacity, highly detailed, 8k resolution, conde nast, lvmh",
+  "negative": "oversaturated, overexposed, deformed, distorted, blur, blurry",
+  "seed": 43890655
 }

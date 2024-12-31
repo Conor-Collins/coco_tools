@@ -1,5 +1,5 @@
 {
-  "positive_prompt": "A high key product photo in natural overcast lighting of a beauty product container with the word Atlas on the label in a Japanese zen garden in morning mist, highly detailed, 8k resolution, conde nast, lvmh",
-  "negative_prompt": "blur, blurry, low quality, jpeg artifacts, deformed, distorted",
-  "seed": 356810142
+  "positive": "A street photography product photo in dramatic rim light of a beauty product container with the word Selene on the label in a 1970s NASA control room, highly detailed, 8k resolution, conde nast, lvmh",
+  "negative": "oversaturated, overexposed, low quality, jpeg artifacts, deformed, distorted",
+  "seed": 711084344
 }

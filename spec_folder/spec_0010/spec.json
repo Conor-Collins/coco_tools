@@ -1,5 +1,5 @@
 {
-  "positive_prompt": "A high key product photo in golden hour glow of a beauty product container with the word Hades on the label in a Soviet Constructivist factory, highly detailed, 8k resolution, conde nast, lvmh",
-  "negative_prompt": "oversaturated, overexposed, deformed, distorted, blur, blurry",
-  "seed": 776918322
+  "positive": "A street photography product photo in ambient occlusion lighting of a beauty product container with the word Selene on the label in a Moroccan riad with filtered sunlight, highly detailed, 8k resolution, conde nast, lvmh",
+  "negative": "low quality, jpeg artifacts, oversaturated, overexposed, deformed, distorted",
+  "seed": 303324559
 }
