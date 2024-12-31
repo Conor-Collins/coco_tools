@@ -103,8 +103,8 @@ def create_negative_prompt() -> str:
 def create_spec(index: int) -> Dict:
     """Creates a complete specification with prompts and seed."""
     return {
-        "positive_prompt": create_base_prompt(),
-        "negative_prompt": create_negative_prompt(),
+        "positive": create_base_prompt(),
+        "negative": create_negative_prompt(),
         "seed": random.randint(SEED_MIN, SEED_MAX)
     }
 

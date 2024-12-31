@@ -26,12 +26,18 @@ class json_value:
 
     def find_key_in_json(self, json_directory: str, key_to_find: str) -> Tuple[str]:
         try:
+            # Debug print
+            print(f"Looking for key: '{key_to_find}'")
+            
             # Ensure the directory exists
             if not os.path.exists(json_directory) or not os.path.isdir(json_directory):
                 return (f"The provided directory path '{json_directory}' is not valid.",)
 
             # Find all JSON files in the directory
             json_files = [f for f in os.listdir(json_directory) if f.endswith(".json")]
+            
+            # Debug print
+            print(f"Found JSON files: {json_files}")
 
             # Ensure there's only one JSON file in the directory
             if len(json_files) != 1:
@@ -41,12 +47,16 @@ class json_value:
             json_file_path = os.path.join(json_directory, json_files[0])
             with open(json_file_path, "r") as file:
                 parsed_data = json.load(file)
+            
+            # Debug print
+            print(f"Loaded JSON data: {parsed_data}")
+            print(f"Available keys: {list(parsed_data.keys())}")
 
             # Check if the key exists in the JSON structure
             if key_to_find in parsed_data:
                 return (str(parsed_data[key_to_find]),)
             else:
-                return (f"Key '{key_to_find}' not found",)
+                return (f"Key '{key_to_find}' not found in available keys: {list(parsed_data.keys())}",)
         
         except json.JSONDecodeError:
             return (f"Invalid JSON format in file '{json_file_path}'.",)

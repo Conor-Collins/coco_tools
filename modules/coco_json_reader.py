@@ -9,26 +9,29 @@ class JSON_SPEC_READER:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "folder_path": ("STRING", {"default": "D:/Default_Folder/"})
+                "folder_path": ("STRING", {"default": "D:/Default_Folder/"}),
+                "name": ("STRING", {"default": "metadata"})
             }
         }
 
-    RETURN_TYPES = ("INT", "STRING", "STRING", "STRING")
-    RETURN_NAMES = ("Seed", "Asset Folder", "Negative Prompt", "Positive Prompt")
+    RETURN_TYPES = ("INT", "STRING", "STRING")
+    RETURN_NAMES = ("Seed", "Positive Prompt", "Negative Prompt")
     FUNCTION = "read_metadata"
     CATEGORY = "COCO Tools/JSON Tools"
 
-    def read_metadata(self, folder_path):
-        metadata_path = os.path.join(folder_path, "metadata.json")
-        if not os.path.exists(metadata_path):
-            raise FileNotFoundError(f"metadata.json not found in {folder_path}")
+    def read_metadata(self, folder_path, name):
+        # Construct the full path using the custom name
+        json_path = os.path.join(folder_path, f"{name}.json")
+        
+        # Update error message to include custom filename
+        if not os.path.exists(json_path):
+            raise FileNotFoundError(f"{name}.json not found in {folder_path}")
 
-        with open(metadata_path, 'r') as file:
+        with open(json_path, 'r') as file:
             metadata = json.load(file)
 
         seed = metadata.get("seed", 0)
-        asset_folder = metadata.get("folders", {}).get("asset_folder", "")
-        negative_prompt = metadata.get("prompts", {}).get("negative", "")
-        positive_prompt = metadata.get("prompts", {}).get("positive", "")
+        negative_prompt = metadata.get("negative", "MISSING KEY")
+        positive_prompt = metadata.get("positive", "MISSING KEY")
 
-        return (seed, asset_folder, negative_prompt, positive_prompt)
+        return (seed, negative_prompt, positive_prompt)
