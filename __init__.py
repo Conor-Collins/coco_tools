@@ -12,6 +12,7 @@ from .modules.coco_load_exr import load_exr
 from .modules.coco_image_loader import coco_loader
 from .modules.coco_frequency_separation import frequency_separation
 from .modules.coco_frequency_combine import frequency_combine
+from .modules.coco_znormalize import znormalize
 
 # Initialize node mappings
 NODE_CLASS_MAPPINGS = {}
@@ -20,6 +21,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {}
 # Add all node classes to the mappings
 NODE_CLASS_MAPPINGS.update({
     "ZDepthNode": zdepth,
+    "znormalize": znormalize,
     "NoiseNode": noise,
     "split_threebands": split_threebands,
     "CocoImageLoader": coco_loader,
@@ -38,6 +40,7 @@ NODE_CLASS_MAPPINGS.update({
 # Add display names for better UI presentation
 NODE_DISPLAY_NAME_MAPPINGS.update({
     "ZDepthNode": "Z-Depth Reader",
+    "znormalize": "znormalize",
     "NoiseNode": "Generate Noise",
     "split_threebands": "Split into Three Bands",
     "CocoImageLoader": "Image Loader (Multi-Format)",
@@ -50,7 +53,7 @@ NODE_DISPLAY_NAME_MAPPINGS.update({
     "RandomIntNode": "Random Integer",
     "RegexFindNode": "Regex Find",
     "frequency_separation": "Frequency Separation",
-    "frequency_combine": "Frequency Combine"
+    "frequency_combine": "Frequency Combine",
 })
 
 # Expose what ComfyUI needs
