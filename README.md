@@ -5,16 +5,12 @@ ComfyUI-CoCoTools is a set of custom nodes for ComfyUI, providing advanced image
 
 
 ### Current Features
-- Advanced EXR image loading with flexible channel extraction
 - Robust image processing utilities
-- Scaling tools for file and path management
+- Scaling tools for file and path management via JSON specification files
 - Utility nodes for various image and data operations
 
 
 ## Installation
-
-
-### Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
@@ -24,25 +20,6 @@ pip install -r requirements.txt
 2. Install dependencies
 3. Restart ComfyUI
 
-
-## Node Categories
-- Image Processing
-- File & Path Management
-- Data Manipulation
-- Utility Nodes
-
-
-## Contributing
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push and create a Pull Request
-
-
-## License
-
-
-## Acknowledgements
-- ComfyUI Community
-- OpenEXR Project
-- PyTorch Team
+## To-Do
+[ ] implement EXR loader and saver
+[ ] cleanup the README and add more info on specific nodes

@@ -1,7 +1,8 @@
 __pycache__/
 *.pyc
-.DS_Store
-.vscode/
-.code-workspace
+*.DS_Store
+*.vscode/
+*.code-workspace
+*.log
 ref/
 deprecated/
