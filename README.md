@@ -1,13 +1,11 @@
 # ComfyUI-CoCoTools
 
-## Overview
-ComfyUI-CoCoTools is a set of custom nodes for ComfyUI, providing advanced image processing, file handling, and utility functions.
+A set of custom nodes for ComfyUI providing advanced image processing, file handling, and utility functions.
 
-
-### Current Features
-- Robust image processing utilities
-- Scaling tools for file and path management via JSON specification files
-- Utility nodes for various image and data operations
+## Features
+- Image processing utilities  
+- JSON-based scaling tools for file/path management
+- Utility nodes for image and data operations
 
 
 ## Installation
@@ -20,6 +18,9 @@ pip install -r requirements.txt
 2. Install dependencies
 3. Restart ComfyUI
 
+
+
+
 ## To-Do
-[ ] implement EXR loader and saver
-[ ] cleanup the README and add more info on specific nodes
+- [ ] implement EXR loader and saver
+- [ ] cleanup the README and add more info on specific nodes
