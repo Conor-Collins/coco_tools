@@ -1,15 +1,13 @@
 # ComfyUI-CoCoTools
-This readme and repo is a work in progress
-
 
 ## Overview
 ComfyUI-CoCoTools is a set of custom nodes for ComfyUI, providing advanced image processing, file handling, and utility functions.
 
 
-## Features
+### Current Features
 - Advanced EXR image loading with flexible channel extraction
 - Robust image processing utilities
-- Flexible file and path management
+- Scaling tools for file and path management
 - Utility nodes for various image and data operations
 
 
