@@ -22,5 +22,10 @@ pip install -r requirements.txt
 
 
 ## To-Do
-- [ ] implement EXR loader and saver
-- [ ] cleanup the README and add more info on specific nodes
+- [x] implement proper exr loading
+- [ ] implement exr saver for proper exr saving using OpenImageIO
+- [ ] implement minimal color management system
+- [ ] create split frequency for video node
+- [ ] create some experimental frequency tools ( motion detection from frame offset seperation)
+- [ ] add more info on specific nodes
+- [ ] add more workflows to show how to use custom nodes
