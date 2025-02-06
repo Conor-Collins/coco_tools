@@ -5,15 +5,13 @@ import torch
 from typing import Tuple
 
 try:
-    import OpenEXR
-    import Imath
-    OPENEXR_AVAILABLE = True
+    import OpenImageIO as oiio
+    OIIO_AVAILABLE = True
 except ImportError:
-    OPENEXR_AVAILABLE = False
+    OIIO_AVAILABLE = False
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 class load_exr:
     @classmethod
@@ -41,70 +39,62 @@ class load_exr:
         self, image_path: str, normalize: bool = True, node_id: str = None
     ) -> Tuple[torch.Tensor, torch.Tensor, str]:
         """
-        Main function to load and process an EXR image.
+        Main function to load and process an EXR image using OpenImageIO.
         """
-        if not OPENEXR_AVAILABLE:
-            raise ImportError("OpenEXR or Imath not installed. Cannot load EXR files.")
+        if not OIIO_AVAILABLE:
+            raise ImportError("OpenImageIO not installed. Cannot load EXR files.")
 
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"EXR file not found: {image_path}")
 
         try:
-            exr_file = OpenEXR.InputFile(image_path)
-            header = exr_file.header()
+            # Open the image
+            input_file = oiio.ImageInput.open(image_path)
+            if not input_file:
+                raise IOError(f"Could not open {image_path}")
 
-            # Check required channels
-            channels_available = set(header["channels"].keys())
-            missing_channels = {"R", "G", "B"} - channels_available
-            if missing_channels:
-                raise ValueError(f"EXR file missing required channels: {missing_channels}")
+            # Read the image spec
+            spec = input_file.spec()
+            width = spec.width
+            height = spec.height
+            channels = spec.nchannels
 
-            # Get dimensions
-            dw = header["dataWindow"]
-            width = dw.max.x - dw.min.x + 1
-            height = dw.max.y - dw.min.y + 1
+            # Read the image data
+            pixels = input_file.read_image()
+            input_file.close()
 
-            # Read RGB channels
-            pt = Imath.PixelType(Imath.PixelType.FLOAT)
-            rgb_data = [
-                np.frombuffer(exr_file.channel(c, pt), dtype=np.float32).reshape(height, width)
-                for c in ["R", "G", "B"]
-            ]
-            rgb_tensor = torch.from_numpy(np.stack(rgb_data, axis=-1)).unsqueeze(0)
+            # Convert to numpy array and reshape
+            img_array = np.array(pixels).reshape(height, width, channels)
 
-            # Handle alpha channel if present
-            alpha_tensor = (
-                torch.from_numpy(
-                    np.frombuffer(exr_file.channel("A", pt), dtype=np.float32).reshape(height, width)
-                ).unsqueeze(0).unsqueeze(-1) if "A" in channels_available else torch.ones_like(rgb_tensor[:, :, :, :1])
-            )
+            # Extract RGB and Alpha channels
+            rgb_array = img_array[:, :, :3]
+            alpha_array = img_array[:, :, 3] if channels > 3 else None
 
-            # Normalize tensors if requested
+            # Convert to torch tensors
+            rgb_tensor = torch.from_numpy(rgb_array).float().unsqueeze(0)  # [B, H, W, C]
+            
+            if alpha_array is not None:
+                mask_tensor = torch.from_numpy(alpha_array).float().unsqueeze(0)  # [B, H, W]
+            else:
+                mask_tensor = torch.ones((1, height, width))  # Default mask if no alpha channel
+
+            # Normalize if requested
             if normalize:
-                rgb_tensor = self.normalize_image(rgb_tensor)
-                alpha_tensor = self.normalize_image(alpha_tensor)
+                rgb_tensor = (rgb_tensor - rgb_tensor.min()) / (rgb_tensor.max() - rgb_tensor.min())
+                mask_tensor = mask_tensor.clamp(0, 1)
 
             # Prepare metadata
             metadata = {
                 "file_path": image_path,
-                "tensor_shape": tuple(rgb_tensor.shape),
-                "format": ".exr"
+                "dimensions": f"{width}x{height}",
+                "channels": channels
             }
 
-            return rgb_tensor, alpha_tensor, str(metadata)
+            return rgb_tensor, mask_tensor, str(metadata)
 
         except Exception as e:
-            logger.error(f"Error loading EXR file {image_path}: {e}")
-            raise ValueError(f"Error loading EXR file {image_path}: {e}")
-
-    @staticmethod
-    def normalize_image(image: torch.Tensor) -> torch.Tensor:
-        """
-        Normalize a tensor to the 0-1 range.
-        """
-        min_val, max_val = image.min(), image.max()
-        return (image - min_val) / (max_val - min_val) if min_val != max_val else torch.zeros_like(image)
-
+            logger.error(f"Error loading EXR file {image_path}: {str(e)}")
+            raise
 
 NODE_CLASS_MAPPINGS = {
     "load_exr": load_exr
