@@ -23,6 +23,7 @@ pip install -r requirements.txt
 
 ## To-Do
 - [x] implement proper exr loading
+- [ ] implement EXR sequence loader
 - [ ] implement exr saver for proper exr saving using OpenImageIO
 - [ ] implement minimal color management system
 - [ ] create split frequency for video node
