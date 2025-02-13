@@ -26,7 +26,10 @@ pip install -r requirements.txt
 - [ ] implement EXR sequence loader
 - [ ] implement exr saver for proper exr saving using OpenImageIO
 - [ ] implement minimal color management system
+- [ ] implement multilayer exr system ( render passes, aovs, embedded images, etc)
 - [ ] create split frequency for video node
 - [ ] create some experimental frequency tools ( motion detection from frame offset seperation)
 - [ ] add more info on specific nodes
 - [ ] add more workflows to show how to use custom nodes
+
+- [ ] submit to ComfyUI Registry

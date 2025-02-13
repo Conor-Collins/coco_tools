@@ -4,6 +4,8 @@ import numpy as np
 import tifffile
 import folder_paths
 from typing import Dict, List, Tuple, Union
+import OpenImageIO as oiio
+from datetime import datetime
 
 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 import cv2 as cv
@@ -20,8 +22,9 @@ class saver:
             "required": {
                 "images": ("IMAGE",),
                 "file_path": ("STRING", {"default": "ComfyUI"}),
-                "file_type": (["png", "jpg", "jpeg", "webp", "tiff", "exr"],),
-                "bit_depth": (["8", "16", "32"],),
+                "file_type": (["exr", "png", "jpg", "jpeg", "webp", "tiff"],),
+                "bit_depth": (["8", "16", "32"], {"default": "16"}),
+                "exr_compression": (["none", "zip", "zips", "rle", "pxr24", "b44", "b44a", "dwaa", "dwab"], {"default": "zips"}),
                 "quality": ("INT", {"default": 95, "min": 1, "max": 100}),
                 "sRGB_to_linear": ("BOOLEAN", {"default": True}),
                 "version": ("INT", {"default": 1, "min": -1, "max": 999}),
@@ -64,22 +67,20 @@ class saver:
 
     def _validate_format_bitdepth(self, file_type: str, bit_depth: int) -> Tuple[str, int]:
 
-        format_depth_limits = {
-            "png": (8, 16),
-            "jpg": (8, 8),
-            "jpeg": (8, 8),
-            "webp": (8, 8),
-            "tiff": (8, 32),
-            "exr": (16, 32)
+        valid_combinations = {
+            "exr": [16, 32],  # OpenEXR supports half and full float
+            "png": [8, 16],
+            "jpg": [8],
+            "jpeg": [8],
+            "webp": [8],
+            "tiff": [8, 16, 32]
         }
         
-        min_depth, max_depth = format_depth_limits[file_type]
-        adjusted_depth = min(max(bit_depth, min_depth), max_depth)
+        if bit_depth not in valid_combinations[file_type]:
+            print(f"Warning: {file_type} format only supports {valid_combinations[file_type]} bit depth. Adjusting to {valid_combinations[file_type][0]} bit.")
+            bit_depth = valid_combinations[file_type][0]
         
-        if adjusted_depth != bit_depth:
-            print(f"Warning: {file_type} format only supports {min_depth}-{max_depth} bit depth. Adjusting to {adjusted_depth} bit.")
-        
-        return file_type, adjusted_depth
+        return file_type, bit_depth
 
     def increment_filename(self, filepath: str) -> str:
 
@@ -116,7 +117,7 @@ class saver:
 
     def save_images(self, images: torch.Tensor, file_path: str, file_type: str, bit_depth: str,
                    quality: int = 95, sRGB_to_linear: bool = True, version: int = 1,
-                   start_frame: int = 1001, frame_pad: int = 4, prompt=None, extra_pnginfo=None) -> Dict:
+                   start_frame: int = 1001, frame_pad: int = 4, prompt=None, extra_pnginfo=None, exr_compression: str = "zips") -> Dict:
 
         try:
             bit_depth = int(bit_depth)
@@ -159,17 +160,77 @@ class saver:
 
                 # Save the image based on format
                 if file_type == "exr":
-                    cv.imwrite(out_path, img_np)
+
+                    
+                    try:
+                        # EXR-specific channel handling
+                        if file_type == "exr":
+                            # Use grayscale detection to handle single-channel
+                            channels = 1 if img_np.ndim == 2 else img_np.shape[2]
+                            
+                            # Ensure float32 data type
+                            exr_data = np.ascontiguousarray(img_np.astype(np.float32))
+                            
+                            # Create spec with detected channels
+                            spec = oiio.ImageSpec(
+                                exr_data.shape[1],  # width
+                                exr_data.shape[0],  # height
+                                channels,  # channels
+                                "float"
+                            )
+                            
+                            # Set compression level (0=none, 9=max)
+                            spec.attribute("compression", exr_compression)
+                            spec.attribute("Orientation", 1)
+                            
+                            # Add creation time and software metadata
+                            spec.attribute("DateTime", datetime.now().isoformat())
+                            spec.attribute("Software", "COCO Tools")
+                            
+                            # Create image buffer and write
+                            buf = oiio.ImageBuf(spec)
+                            buf.set_pixels(oiio.ROI(), exr_data)
+                            
+                            if not buf.write(out_path):
+                                raise RuntimeError(f"Failed to write EXR: {oiio.geterror()}")
+                        
+                    except Exception as e:
+                        raise RuntimeError(f"OpenImageIO EXR save failed: {str(e)}")
+
+                elif file_type == "png":
+                    try:
+                        # Determine data type from bit depth
+                        dtype = np.uint16 if bit_depth == 16 else np.uint8
+                        
+                        # Convert and validate array
+                        png_data = np.ascontiguousarray(img_np.astype(dtype))
+                        
+                        # Create image spec
+                        channels = 1 if png_data.ndim == 2 else png_data.shape[2]
+                        spec = oiio.ImageSpec(
+                            png_data.shape[1],
+                            png_data.shape[0],
+                            channels,
+                            "uint16" if bit_depth == 16 else "uint8"
+                        )
+                        
+                        # Set compression level (0=none, 9=max)
+                        spec.attribute("compression", "zip")
+                        spec.attribute("png:compressionLevel", 9)
+                        
+                        # Write image
+                        buf = oiio.ImageBuf(spec)
+                        buf.set_pixels(oiio.ROI(), png_data)
+                        
+                        if not buf.write(out_path):
+                            raise RuntimeError(f"PNG save failed: {oiio.geterror()}")
+                    
+                    except Exception as e:
+                        raise RuntimeError(f"OpenImageIO PNG save error: {str(e)}")
 
                 elif file_type in ["jpg", "jpeg", "webp"]:
                     cv.imwrite(out_path, img_np, [cv.IMWRITE_JPEG_QUALITY, quality])
 
-                elif file_type == "png":
-                    if bit_depth == 16:
-                        cv.imwrite(out_path, img_np, [cv.IMWRITE_PNG_COMPRESSION, 9])
-                    else:
-                        cv.imwrite(out_path, img_np)
-                        
                 elif file_type == "tiff":
                         # Convert BGR back to RGB for TIFF saving
                     if img_np.shape[-1] >= 3:

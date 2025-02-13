@@ -60,28 +60,46 @@ class load_exr:
             channels = spec.nchannels
 
             # Read the image data
-            pixels = input_file.read_image()
+            buf = input_file.read_image()
             input_file.close()
 
             # Convert to numpy array and reshape
-            img_array = np.array(pixels).reshape(height, width, channels)
-
-            # Extract RGB and Alpha channels
-            rgb_array = img_array[:, :, :3]
-            alpha_array = img_array[:, :, 3] if channels > 3 else None
-
-            # Convert to torch tensors
-            rgb_tensor = torch.from_numpy(rgb_array).float().unsqueeze(0)  # [B, H, W, C]
+            img_array = np.frombuffer(buf.get_data(), dtype=np.float32)
             
-            if alpha_array is not None:
-                mask_tensor = torch.from_numpy(alpha_array).float().unsqueeze(0)  # [B, H, W]
+            if spec.nchannels == 1:
+                img_array = img_array.reshape((spec.height, spec.width))
             else:
-                mask_tensor = torch.ones((1, height, width))  # Default mask if no alpha channel
+                img_array = img_array.reshape((spec.height, spec.width, spec.nchannels))
 
-            # Normalize if requested
+            # Channel extraction logic
+            if spec.nchannels == 1:
+                color_array = img_array
+                alpha_array = None
+            elif spec.nchannels == 2:
+                color_array = img_array[..., 0]
+                alpha_array = img_array[..., 1]
+            elif spec.nchannels >= 3:
+                color_array = img_array[..., :3]
+                alpha_array = img_array[..., 3] if spec.nchannels >= 4 else None
+            else:
+                color_array = img_array
+                alpha_array = None
+
             if normalize:
-                rgb_tensor = (rgb_tensor - rgb_tensor.min()) / (rgb_tensor.max() - rgb_tensor.min())
-                mask_tensor = mask_tensor.clamp(0, 1)
+                color_array = (color_array - np.min(color_array)) / (np.max(color_array) - np.min(color_array))
+                if alpha_array is not None:
+                    alpha_array = (alpha_array - np.min(alpha_array)) / (np.max(alpha_array) - np.min(alpha_array))
+
+            # Convert to tensors
+            color_tensor = torch.from_numpy(color_array).float()
+            if color_tensor.ndim == 2:
+                color_tensor = color_tensor.unsqueeze(-1)
+            color_tensor = color_tensor.permute(2, 0, 1).unsqueeze(0)
+
+            if alpha_array is not None:
+                mask_tensor = torch.from_numpy(alpha_array).float().unsqueeze(0).unsqueeze(0)
+            else:
+                mask_tensor = torch.ones((1, 1, spec.height, spec.width))
 
             # Prepare metadata
             metadata = {
@@ -90,7 +108,7 @@ class load_exr:
                 "channels": channels
             }
 
-            return rgb_tensor, mask_tensor, str(metadata)
+            return color_tensor, mask_tensor, str(metadata)
 
         except Exception as e:
             logger.error(f"Error loading EXR file {image_path}: {str(e)}")
