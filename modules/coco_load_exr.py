@@ -39,7 +39,15 @@ class load_exr:
         self, image_path: str, normalize: bool = True, node_id: str = None
     ) -> Tuple[torch.Tensor, torch.Tensor, str]:
         """
-        Main function to load and process an EXR image using OpenImageIO.
+        Load and process an EXR image using OpenImageIO.
+        Guarantees output format compatibility with ComfyUI:
+        - Image output shape: [1, H, W, 3] (batch, height, width, RGB channels)
+        - Mask output shape: [1, H, W] (batch, height, width)
+        
+        Supports:
+        - Greyscale (1 channel)
+        - RGB (3 channels)
+        - RGBA (4 channels)
         """
         if not OIIO_AVAILABLE:
             raise ImportError("OpenImageIO not installed. Cannot load EXR files.")
@@ -47,6 +55,7 @@ class load_exr:
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"EXR file not found: {image_path}")
 
+        input_file = None
         try:
             # Open the image
             input_file = oiio.ImageInput.open(image_path)
@@ -59,60 +68,72 @@ class load_exr:
             height = spec.height
             channels = spec.nchannels
 
+            # Validate dimensions
+            if width <= 0 or height <= 0:
+                raise ValueError(f"Invalid image dimensions: {width}x{height}")
+
             # Read the image data
-            buf = input_file.read_image()
-            input_file.close()
+            pixels = input_file.read_image()
+            if pixels is None:
+                raise IOError("Failed to read image data")
 
-            # Convert to numpy array and reshape
-            img_array = np.frombuffer(buf.get_data(), dtype=np.float32)
-            
-            if spec.nchannels == 1:
-                img_array = img_array.reshape((spec.height, spec.width))
-            else:
-                img_array = img_array.reshape((spec.height, spec.width, spec.nchannels))
+            # Convert to numpy array with correct shape
+            img_array = np.array(pixels, dtype=np.float32).reshape(height, width, channels)
 
-            # Channel extraction logic
-            if spec.nchannels == 1:
-                color_array = img_array
+            # Handle different channel configurations
+            if channels == 1:  # Greyscale
+                # Duplicate single channel to RGB
+                rgb_array = np.dstack([img_array] * 3)  # Shape: [H, W, 3]
                 alpha_array = None
-            elif spec.nchannels == 2:
-                color_array = img_array[..., 0]
-                alpha_array = img_array[..., 1]
-            elif spec.nchannels >= 3:
-                color_array = img_array[..., :3]
-                alpha_array = img_array[..., 3] if spec.nchannels >= 4 else None
-            else:
-                color_array = img_array
+            elif channels == 3:  # RGB
+                rgb_array = img_array  # Shape: [H, W, 3]
                 alpha_array = None
+            elif channels == 4:  # RGBA
+                rgb_array = img_array[:, :, :3]  # Shape: [H, W, 3]
+                alpha_array = img_array[:, :, 3]  # Shape: [H, W]
+            else:
+                raise ValueError(f"Unsupported number of channels: {channels}. Expected 1, 3, or 4.")
 
-            if normalize:
-                color_array = (color_array - np.min(color_array)) / (np.max(color_array) - np.min(color_array))
-                if alpha_array is not None:
-                    alpha_array = (alpha_array - np.min(alpha_array)) / (np.max(alpha_array) - np.min(alpha_array))
+            # Verify shapes
+            assert rgb_array.shape == (height, width, 3), f"Unexpected RGB shape: {rgb_array.shape}"
 
-            # Convert to tensors
-            color_tensor = torch.from_numpy(color_array).float()
-            if color_tensor.ndim == 2:
-                color_tensor = color_tensor.unsqueeze(-1)
-            color_tensor = color_tensor.permute(2, 0, 1).unsqueeze(0)
+            # Convert to torch tensors with correct shapes for ComfyUI
+            rgb_tensor = torch.from_numpy(rgb_array).float()
+            rgb_tensor = rgb_tensor.unsqueeze(0)  # Add batch dimension: [1, H, W, 3]
 
             if alpha_array is not None:
-                mask_tensor = torch.from_numpy(alpha_array).float().unsqueeze(0).unsqueeze(0)
+                mask_tensor = torch.from_numpy(alpha_array).float()
+                mask_tensor = mask_tensor.unsqueeze(0)  # Add batch dimension: [1, H, W]
             else:
-                mask_tensor = torch.ones((1, 1, spec.height, spec.width))
+                mask_tensor = torch.ones((1, height, width))  # [1, H, W]
 
-            # Prepare metadata
+            # Normalize if requested
+            if normalize:
+                # Avoid division by zero
+                rgb_range = rgb_tensor.max() - rgb_tensor.min()
+                if rgb_range > 0:
+                    rgb_tensor = (rgb_tensor - rgb_tensor.min()) / rgb_range
+                mask_tensor = mask_tensor.clamp(0, 1)
+
+            # Verify final tensor shapes
+            assert rgb_tensor.shape == (1, height, width, 3), f"Invalid RGB tensor shape: {rgb_tensor.shape}"
+            assert mask_tensor.shape == (1, height, width), f"Invalid mask tensor shape: {mask_tensor.shape}"
+
             metadata = {
-                "file_path": image_path,
                 "dimensions": f"{width}x{height}",
-                "channels": channels
+                "original_channels": channels,
+                "type": "greyscale" if channels == 1 else ("rgba" if channels == 4 else "rgb")
             }
 
-            return color_tensor, mask_tensor, str(metadata)
+            return rgb_tensor, mask_tensor, str(metadata)
 
         except Exception as e:
             logger.error(f"Error loading EXR file {image_path}: {str(e)}")
             raise
+
+        finally:
+            if input_file:
+                input_file.close()
 
 NODE_CLASS_MAPPINGS = {
     "load_exr": load_exr
