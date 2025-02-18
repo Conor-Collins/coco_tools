@@ -3,7 +3,7 @@ import torch
 import numpy as np
 import tifffile
 import folder_paths
-from typing import Dict, List, Tuple, Union
+from typing import Dict, Tuple
 import OpenImageIO as oiio
 from datetime import datetime
 import sys
@@ -128,11 +128,163 @@ class saver:
         
         return img
 
+    def _save_exr(self, img_np: np.ndarray, out_path: str, save_as_grayscale: bool, exr_compression: str) -> None:
+        """Save image data as EXR file using OpenImageIO."""
+        try:
+            # Determine channels and prepare data
+            if img_np.ndim == 2 or img_np.shape[-1] == 1 or save_as_grayscale:
+                channels = 1
+                if img_np.ndim == 3 and img_np.shape[-1] > 1:
+                    exr_data = img_np[..., 0:1]  # Extract first channel for grayscale
+                else:
+                    exr_data = img_np[..., np.newaxis] if img_np.ndim == 2 else img_np
+            else:
+                channels = img_np.shape[-1]
+                exr_data = img_np
+
+            sys.stderr.write(f"\nSaving EXR - Shape: {exr_data.shape}, Channels: {channels}\n")
+            sys.stderr.write(f"Value range - Min: {exr_data.min()}, Max: {exr_data.max()}\n")
+            
+            # Ensure data is float32 and contiguous
+            exr_data = np.ascontiguousarray(exr_data.astype(np.float32))
+            
+            # Create spec with detected channels
+            spec = oiio.ImageSpec(
+                exr_data.shape[1],  # width
+                exr_data.shape[0],  # height
+                channels,  # channels
+                oiio.FLOAT  # Always use FLOAT for EXR
+            )
+            
+            # Set EXR-specific attributes
+            spec.attribute("compression", exr_compression)
+            spec.attribute("Orientation", 1)
+            spec.attribute("DateTime", datetime.now().isoformat())
+            spec.attribute("Software", "COCO Tools")
+            
+            # Create and write image buffer
+            buf = oiio.ImageBuf(spec)
+            buf.set_pixels(oiio.ROI(), exr_data)
+            
+            if not buf.write(out_path):
+                raise RuntimeError(f"Failed to write EXR: {oiio.geterror()}")
+            
+        except Exception as e:
+            raise RuntimeError(f"OpenImageIO EXR save failed: {str(e)}")
+
+    def _save_png(self, img_np: np.ndarray, out_path: str, bit_depth: int) -> None:
+        """Save image data as PNG file using OpenImageIO."""
+        try:
+            # Determine data type based on bit depth
+            if bit_depth == 8:
+                dtype = "uint8"
+                pixel_type = np.uint8
+            elif bit_depth == 16:
+                dtype = "uint16"
+                pixel_type = np.uint16
+            else:  # 32-bit
+                dtype = "float"
+                pixel_type = np.float32
+            
+            # Convert and validate array
+            png_data = np.ascontiguousarray(img_np.astype(pixel_type))
+            
+            # Create image spec
+            channels = 1 if png_data.ndim == 2 else png_data.shape[-1]
+            spec = oiio.ImageSpec(
+                png_data.shape[1],  # width
+                png_data.shape[0],  # height
+                channels,  # channels
+                dtype
+            )
+            
+            # Set PNG-specific attributes
+            spec.attribute("compression", "zip")
+            spec.attribute("png:compressionLevel", 9)
+            
+            if bit_depth == 32:
+                spec.attribute("oiio:ColorSpace", "Linear")
+            
+            # Create and write image buffer
+            buf = oiio.ImageBuf(spec)
+            buf.set_pixels(oiio.ROI(), png_data)
+            
+            if not buf.write(out_path):
+                raise RuntimeError(f"Failed to write PNG: {oiio.geterror()}")
+        
+        except Exception as e:
+            raise RuntimeError(f"OpenImageIO PNG save error: {str(e)}")
+
+    def _save_jpeg_or_webp(self, img_np: np.ndarray, out_path: str, quality: int) -> None:
+        """Save image data as JPEG or WebP file using OpenCV."""
+        cv.imwrite(out_path, img_np, [cv.IMWRITE_JPEG_QUALITY, quality])
+
+    def _save_tiff(self, img_np: np.ndarray, out_path: str, bit_depth: int) -> None:
+        """Save image data as TIFF file using tifffile."""
+        # Convert BGR back to RGB for TIFF saving
+        if img_np.shape[-1] >= 3:
+            img_np = cv.cvtColor(img_np, cv.COLOR_BGR2RGB)
+        
+        # Handle TIFF saving with appropriate bit depth
+        if bit_depth == 8:
+            tifffile.imwrite(out_path, img_np.astype(np.uint8), photometric='rgb')
+        elif bit_depth == 16:
+            tifffile.imwrite(out_path, img_np.astype(np.uint16), photometric='rgb')
+        else:  # 32-bit
+            tifffile.imwrite(
+                out_path,
+                img_np.astype(np.float32),
+                photometric='rgb',
+                dtype=np.float32
+            )
+
+    def _prepare_image_data(self, img_tensor: torch.Tensor, file_type: str, bit_depth: int, 
+                           sRGB_to_linear: bool, save_as_grayscale: bool) -> np.ndarray:
+        """Prepare image data for saving by handling conversion and preprocessing."""
+        if file_type == "exr":
+            # Skip sRGB conversion for EXR to preserve original values
+            sRGB_to_linear = False
+            
+            # Convert from torch tensor if needed
+            if isinstance(img_tensor, torch.Tensor):
+                # Remove batch dimension if present
+                if img_tensor.ndim == 4 and img_tensor.shape[0] == 1:
+                    img_np = img_tensor.squeeze(0).cpu().numpy()
+                else:
+                    img_np = img_tensor.cpu().numpy()
+            else:
+                img_np = img_tensor
+            
+            sys.stderr.write(f"Initial EXR data - Shape: {img_np.shape}, Min: {img_np.min()}, Max: {img_np.max()}\n")
+            
+            # Prepare image (handles channel conversion if needed)
+            img_np = self._prepare_image_for_saving(img_np, file_type, save_as_grayscale)
+            
+            # For EXR, preserve original values without normalization
+            img_np = img_np.astype(np.float32)
+        else:
+            # For non-EXR files, use standard processing
+            if isinstance(img_tensor, torch.Tensor):
+                img_np = img_tensor.cpu().numpy()
+            else:
+                img_np = img_tensor
+            
+            sys.stderr.write(f"Initial numpy min: {img_np.min()}, max: {img_np.max()}\n")
+            
+            # Convert bit depth first for non-EXR files
+            img_np = self._convert_bit_depth(img_np, bit_depth, sRGB_to_linear)
+            sys.stderr.write(f"After bit_depth conversion min: {img_np.min()}, max: {img_np.max()}\n")
+            
+            # Then prepare image
+            img_np = self._prepare_image_for_saving(img_np, file_type, save_as_grayscale)
+        
+        return img_np
+
     def save_images(self, images: torch.Tensor, file_path: str, file_type: str, bit_depth: str,
                    quality: int = 95, sRGB_to_linear: bool = True, save_as_grayscale: bool = False,
                    version: int = 1, start_frame: int = 1001, frame_pad: int = 4,
                    prompt=None, extra_pnginfo=None, exr_compression: str = "zips") -> Dict:
-
+        """Save a batch of images in various formats with support for versioning and frame numbering."""
         try:
             bit_depth = int(bit_depth)
             file_type, bit_depth = self._validate_format_bitdepth(file_type.lower(), bit_depth)
@@ -153,43 +305,8 @@ class saver:
             
             # Process each image in the batch
             for i, img_tensor in enumerate(images):
-                # Convert tensor to numpy without any scaling
-                if file_type == "exr":
-                    # Skip sRGB conversion for EXR to preserve original values
-                    sRGB_to_linear = False
-                    
-                    # Convert from torch tensor if needed
-                    if isinstance(img_tensor, torch.Tensor):
-                        # Remove batch dimension if present
-                        if img_tensor.ndim == 4 and img_tensor.shape[0] == 1:
-                            img_np = img_tensor.squeeze(0).cpu().numpy()
-                        else:
-                            img_np = img_tensor.cpu().numpy()
-                    else:
-                        img_np = img_tensor
-                    
-                    sys.stderr.write(f"Initial EXR data - Shape: {img_np.shape}, Min: {img_np.min()}, Max: {img_np.max()}\n")
-                    
-                    # Prepare image (handles channel conversion if needed)
-                    img_np = self._prepare_image_for_saving(img_np, file_type, save_as_grayscale)
-                    
-                    # For EXR, we want to preserve the original values without normalization
-                    img_np = img_np.astype(np.float32)
-                else:
-                    # For non-EXR files, use standard processing
-                    if isinstance(img_tensor, torch.Tensor):
-                        img_np = img_tensor.cpu().numpy()
-                    else:
-                        img_np = img_tensor
-                    
-                    sys.stderr.write(f"Initial numpy min: {img_np.min()}, max: {img_np.max()}\n")
-                    
-                    # Convert bit depth first for non-EXR files
-                    img_np = self._convert_bit_depth(img_np, bit_depth, sRGB_to_linear)
-                    sys.stderr.write(f"After bit_depth conversion min: {img_np.min()}, max: {img_np.max()}\n")
-                    
-                    # Then prepare image
-                    img_np = self._prepare_image_for_saving(img_np, file_type, save_as_grayscale)
+                # Prepare image data
+                img_np = self._prepare_image_data(img_tensor, file_type, bit_depth, sRGB_to_linear, save_as_grayscale)
                 
                 # Generate output filename
                 frame_num = f".{str(start_frame + i).zfill(frame_pad)}" if file_type == "exr" else f"_{i:05d}"
@@ -201,116 +318,15 @@ class saver:
 
                 # Save the image based on format
                 if file_type == "exr":
-                    try:
-                        # For EXR files, handle the data directly
-                        if img_np.ndim == 2 or img_np.shape[-1] == 1 or save_as_grayscale:
-                            channels = 1
-                            if img_np.ndim == 3 and img_np.shape[-1] > 1:
-                                # Extract first channel for grayscale, preserving values
-                                exr_data = img_np[..., 0:1]
-                            else:
-                                exr_data = img_np[..., np.newaxis] if img_np.ndim == 2 else img_np
-                        else:
-                            channels = img_np.shape[-1]
-                            exr_data = img_np
-
-                        sys.stderr.write(f"\nSaving EXR - Shape: {exr_data.shape}, Channels: {channels}\n")
-                        sys.stderr.write(f"Value range - Min: {exr_data.min()}, Max: {exr_data.max()}\n")
-                        
-                        # Ensure data is float32 and contiguous
-                        exr_data = np.ascontiguousarray(exr_data.astype(np.float32))
-                        
-                        # Create spec with detected channels
-                        spec = oiio.ImageSpec(
-                            exr_data.shape[1],  # width
-                            exr_data.shape[0],  # height
-                            channels,  # channels
-                            oiio.FLOAT  # Always use FLOAT for EXR
-                        )
-                        
-                        # Set compression level (0=none, 9=max)
-                        spec.attribute("compression", exr_compression)
-                        spec.attribute("Orientation", 1)
-                        
-                        # Add creation time and software metadata
-                        spec.attribute("DateTime", datetime.now().isoformat())
-                        spec.attribute("Software", "COCO Tools")
-                        
-                        # Create image buffer and write
-                        buf = oiio.ImageBuf(spec)
-                        buf.set_pixels(oiio.ROI(), exr_data)
-                        
-                        if not buf.write(out_path):
-                            raise RuntimeError(f"Failed to write EXR: {oiio.geterror()}")
-                        
-                    except Exception as e:
-                        raise RuntimeError(f"OpenImageIO EXR save failed: {str(e)}")
-
+                    self._save_exr(img_np, out_path, save_as_grayscale, exr_compression)
                 elif file_type == "png":
-                    try:
-                        # Determine data type and format based on bit depth
-                        if bit_depth == 8:
-                            dtype = "uint8"
-                            pixel_type = np.uint8
-                        elif bit_depth == 16:
-                            dtype = "uint16"
-                            pixel_type = np.uint16
-                        else:  # 32-bit
-                            dtype = "float"
-                            pixel_type = np.float32
-                        
-                        # Convert and validate array
-                        png_data = np.ascontiguousarray(img_np.astype(pixel_type))
-                        
-                        # Create image spec
-                        channels = 1 if png_data.ndim == 2 else png_data.shape[-1]
-                        spec = oiio.ImageSpec(
-                            png_data.shape[1],  # width
-                            png_data.shape[0],  # height
-                            channels,  # channels
-                            dtype
-                        )
-                        
-                        # Set PNG-specific attributes
-                        spec.attribute("compression", "zip")  # Use ZIP compression
-                        spec.attribute("png:compressionLevel", 9)  # Maximum compression
-                        
-                        if bit_depth == 32:
-                            spec.attribute("oiio:ColorSpace", "Linear")  # Ensure linear color space for float
-                        
-                        # Create image buffer and write
-                        buf = oiio.ImageBuf(spec)
-                        buf.set_pixels(oiio.ROI(), png_data)
-                        
-                        if not buf.write(out_path):
-                            raise RuntimeError(f"Failed to write PNG: {oiio.geterror()}")
-                    
-                    except Exception as e:
-                        raise RuntimeError(f"OpenImageIO PNG save error: {str(e)}")
-
+                    self._save_png(img_np, out_path, bit_depth)
                 elif file_type in ["jpg", "jpeg", "webp"]:
-                    cv.imwrite(out_path, img_np, [cv.IMWRITE_JPEG_QUALITY, quality])
-
+                    self._save_jpeg_or_webp(img_np, out_path, quality)
                 elif file_type == "tiff":
-                        # Convert BGR back to RGB for TIFF saving
-                    if img_np.shape[-1] >= 3:
-                        img_np = cv.cvtColor(img_np, cv.COLOR_BGR2RGB)
-                    # Handle TIFF saving with appropriate bit depth
-                    if bit_depth == 8:
-                        tifffile.imwrite(out_path, img_np.astype(np.uint8), photometric='rgb')
-                    elif bit_depth == 16:
-                        tifffile.imwrite(out_path, img_np.astype(np.uint16), photometric='rgb')
-                    else:  # 32-bit
-                        # For 32-bit, we keep the float values and save with appropriate metadata
-                        tifffile.imwrite(
-                            out_path,
-                            img_np.astype(np.float32),
-                            photometric='rgb',
-                            dtype=np.float32,
-                            compression='none',
-                            metadata={'bit_depth': 32}
-                        )
+                    self._save_tiff(img_np, out_path, bit_depth)
 
+            # Return success
             return {"ui": {"images": []}}
 
         except Exception as e:
