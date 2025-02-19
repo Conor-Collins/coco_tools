@@ -122,8 +122,8 @@ class saver:
             if img.shape[-1] == 3:
                 # For EXR workflow, just take R channel to preserve original values
                 img = img[..., 0:1]
-        # Convert to BGR for OpenCV formats only if not saving as grayscale
-        elif file_type in ['jpg', 'jpeg', 'webp', 'png'] and img.shape[-1] >= 3:
+        # Convert to BGR for OpenCV formats only (jpg, jpeg, webp) if not saving as grayscale
+        elif file_type in ['jpg', 'jpeg', 'webp'] and img.shape[-1] >= 3:
             img = cv.cvtColor(img, cv.COLOR_RGB2BGR)
         
         return img
