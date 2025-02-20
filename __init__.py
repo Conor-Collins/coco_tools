@@ -13,6 +13,7 @@ from .modules.coco_image_loader import coco_loader
 from .modules.coco_frequency_separation import frequency_separation
 from .modules.coco_frequency_combine import frequency_combine
 from .modules.coco_znormalize import znormalize
+from .modules.coco_colorspace import colorspace
 
 # Initialize node mappings
 NODE_CLASS_MAPPINGS = {}
@@ -34,7 +35,8 @@ NODE_CLASS_MAPPINGS.update({
     "RandomIntNode": rand_int,
     "RegexFindNode": regex_find,
     "frequency_separation": frequency_separation,
-    "frequency_combine": frequency_combine
+    "frequency_combine": frequency_combine,
+    "ColorspaceNode": colorspace
 })
 
 # Add display names for better UI presentation
@@ -54,6 +56,7 @@ NODE_DISPLAY_NAME_MAPPINGS.update({
     "RegexFindNode": "Regex Find",
     "frequency_separation": "Frequency Separation",
     "frequency_combine": "Frequency Combine",
+    "ColorspaceNode": "Colorspace"
 })
 
 # Expose what ComfyUI needs

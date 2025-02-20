@@ -27,7 +27,6 @@ class saver:
                 "bit_depth": (["8", "16", "32"], {"default": "16"}),
                 "exr_compression": (["none", "zip", "zips", "rle", "pxr24", "b44", "b44a", "dwaa", "dwab"], {"default": "zips"}),
                 "quality": ("INT", {"default": 95, "min": 1, "max": 100}),
-                "sRGB_to_linear": ("BOOLEAN", {"default": True}),
                 "save_as_grayscale": ("BOOLEAN", {"default": False}),
                 "version": ("INT", {"default": 1, "min": -1, "max": 999}),
                 "start_frame": ("INT", {"default": 1001, "min": 0, "max": 99999999}),
@@ -45,22 +44,6 @@ class saver:
     CATEGORY = "COCO Tools/Savers"
 
     @staticmethod
-    def sRGBtoLinear(np_array: np.ndarray) -> np.ndarray:
-        mask = np_array <= 0.0404482362771082
-        result = np_array.copy()  # Create a copy to avoid modifying the input
-        result[mask] = result[mask] / 12.92
-        result[~mask] = np.power((result[~mask] + 0.055) / 1.055, 2.4)
-        return result
-
-    @staticmethod
-    def linearToSRGB(np_array: np.ndarray) -> np.ndarray:
-        mask = np_array <= 0.0031308
-        result = np_array.copy()  # Create a copy to avoid modifying the input
-        result[mask] = result[mask] * 12.92
-        result[~mask] = np.power(result[~mask], 1/2.4) * 1.055 - 0.055
-        return result
-
-    @staticmethod
     def is_grayscale(image: np.ndarray) -> bool:
         """Check if an image is grayscale by either being single channel or having identical RGB channels."""
         if len(image.shape) == 2 or image.shape[-1] == 1:
@@ -70,7 +53,6 @@ class saver:
         return False
 
     def _validate_format_bitdepth(self, file_type: str, bit_depth: int) -> Tuple[str, int]:
-
         valid_combinations = {
             "exr": [16, 32],  # OpenEXR supports half and full float
             "png": [8, 16, 32],  # Now supporting 32-bit PNGs through OpenImageIO
@@ -87,7 +69,6 @@ class saver:
         return file_type, bit_depth
 
     def increment_filename(self, filepath: str) -> str:
-
         base, ext = os.path.splitext(filepath)
         counter = 1
         new_filepath = f"{base}_{counter:05d}{ext}"
@@ -96,18 +77,17 @@ class saver:
             new_filepath = f"{base}_{counter:05d}{ext}"
         return new_filepath
 
-    def _convert_bit_depth(self, img: np.ndarray, bit_depth: int, sRGB_to_linear: bool) -> np.ndarray:
-        # For EXR files, skip sRGB conversion and normalization
-        if bit_depth == 32:
-            return img.astype(np.float32)
-
-        if sRGB_to_linear:
-            img = self.sRGBtoLinear(img)
-
+    def _convert_bit_depth(self, img: np.ndarray, bit_depth: int) -> np.ndarray:
+        """Convert image to specified bit depth."""
         if bit_depth == 8:
             return (np.clip(img, 0, 1) * 255).astype(np.uint8)
         elif bit_depth == 16:
-            return (np.clip(img, 0, 1) * 65535).astype(np.uint16)
+            if isinstance(img.dtype, np.floating):
+                # For floating point data (like EXR), preserve as float16
+                return img.astype(np.float16)
+            else:
+                # For integer data, scale to 16-bit range
+                return (np.clip(img, 0, 1) * 65535).astype(np.uint16)
         else:  # 32-bit
             return img.astype(np.float32)
 
@@ -128,7 +108,31 @@ class saver:
         
         return img
 
-    def _save_exr(self, img_np: np.ndarray, out_path: str, save_as_grayscale: bool, exr_compression: str) -> None:
+    def _prepare_image_data(self, img_tensor: torch.Tensor, file_type: str, bit_depth: int, 
+                           save_as_grayscale: bool) -> np.ndarray:
+        """Prepare image data for saving by handling conversion and preprocessing."""
+        # Convert from torch tensor if needed
+        if isinstance(img_tensor, torch.Tensor):
+            # Remove batch dimension if present
+            if img_tensor.ndim == 4 and img_tensor.shape[0] == 1:
+                img_np = img_tensor.squeeze(0).cpu().numpy()
+            else:
+                img_np = img_tensor.cpu().numpy()
+        else:
+            img_np = img_tensor
+        
+        sys.stderr.write(f"Initial data - Shape: {img_np.shape}, Min: {img_np.min()}, Max: {img_np.max()}\n")
+        
+        # Prepare image (handles channel conversion if needed)
+        img_np = self._prepare_image_for_saving(img_np, file_type, save_as_grayscale)
+        
+        # Convert bit depth for all formats
+        img_np = self._convert_bit_depth(img_np, bit_depth)
+        sys.stderr.write(f"After bit_depth conversion min: {img_np.min()}, max: {img_np.max()}\n")
+        
+        return img_np
+
+    def _save_exr(self, img_np: np.ndarray, out_path: str, save_as_grayscale: bool, exr_compression: str, bit_depth: int) -> None:
         """Save image data as EXR file using OpenImageIO."""
         try:
             # Determine channels and prepare data
@@ -145,15 +149,20 @@ class saver:
             sys.stderr.write(f"\nSaving EXR - Shape: {exr_data.shape}, Channels: {channels}\n")
             sys.stderr.write(f"Value range - Min: {exr_data.min()}, Max: {exr_data.max()}\n")
             
-            # Ensure data is float32 and contiguous
-            exr_data = np.ascontiguousarray(exr_data.astype(np.float32))
+            # Ensure data is contiguous and in the right format
+            if bit_depth == 16:
+                exr_data = np.ascontiguousarray(exr_data.astype(np.float16))
+                pixel_type = oiio.HALF
+            else:  # 32-bit
+                exr_data = np.ascontiguousarray(exr_data.astype(np.float32))
+                pixel_type = oiio.FLOAT
             
             # Create spec with detected channels
             spec = oiio.ImageSpec(
                 exr_data.shape[1],  # width
                 exr_data.shape[0],  # height
                 channels,  # channels
-                oiio.FLOAT  # Always use FLOAT for EXR
+                pixel_type  # Use appropriate pixel type based on bit depth
             )
             
             # Set EXR-specific attributes
@@ -238,50 +247,8 @@ class saver:
                 dtype=np.float32
             )
 
-    def _prepare_image_data(self, img_tensor: torch.Tensor, file_type: str, bit_depth: int, 
-                           sRGB_to_linear: bool, save_as_grayscale: bool) -> np.ndarray:
-        """Prepare image data for saving by handling conversion and preprocessing."""
-        if file_type == "exr":
-            # Skip sRGB conversion for EXR to preserve original values
-            sRGB_to_linear = False
-            
-            # Convert from torch tensor if needed
-            if isinstance(img_tensor, torch.Tensor):
-                # Remove batch dimension if present
-                if img_tensor.ndim == 4 and img_tensor.shape[0] == 1:
-                    img_np = img_tensor.squeeze(0).cpu().numpy()
-                else:
-                    img_np = img_tensor.cpu().numpy()
-            else:
-                img_np = img_tensor
-            
-            sys.stderr.write(f"Initial EXR data - Shape: {img_np.shape}, Min: {img_np.min()}, Max: {img_np.max()}\n")
-            
-            # Prepare image (handles channel conversion if needed)
-            img_np = self._prepare_image_for_saving(img_np, file_type, save_as_grayscale)
-            
-            # For EXR, preserve original values without normalization
-            img_np = img_np.astype(np.float32)
-        else:
-            # For non-EXR files, use standard processing
-            if isinstance(img_tensor, torch.Tensor):
-                img_np = img_tensor.cpu().numpy()
-            else:
-                img_np = img_tensor
-            
-            sys.stderr.write(f"Initial numpy min: {img_np.min()}, max: {img_np.max()}\n")
-            
-            # Convert bit depth first for non-EXR files
-            img_np = self._convert_bit_depth(img_np, bit_depth, sRGB_to_linear)
-            sys.stderr.write(f"After bit_depth conversion min: {img_np.min()}, max: {img_np.max()}\n")
-            
-            # Then prepare image
-            img_np = self._prepare_image_for_saving(img_np, file_type, save_as_grayscale)
-        
-        return img_np
-
     def save_images(self, images: torch.Tensor, file_path: str, file_type: str, bit_depth: str,
-                   quality: int = 95, sRGB_to_linear: bool = True, save_as_grayscale: bool = False,
+                   quality: int = 95, save_as_grayscale: bool = False,
                    version: int = 1, start_frame: int = 1001, frame_pad: int = 4,
                    prompt=None, extra_pnginfo=None, exr_compression: str = "zips") -> Dict:
         """Save a batch of images in various formats with support for versioning and frame numbering."""
@@ -306,7 +273,7 @@ class saver:
             # Process each image in the batch
             for i, img_tensor in enumerate(images):
                 # Prepare image data
-                img_np = self._prepare_image_data(img_tensor, file_type, bit_depth, sRGB_to_linear, save_as_grayscale)
+                img_np = self._prepare_image_data(img_tensor, file_type, bit_depth, save_as_grayscale)
                 
                 # Generate output filename
                 frame_num = f".{str(start_frame + i).zfill(frame_pad)}" if file_type == "exr" else f"_{i:05d}"
@@ -318,7 +285,7 @@ class saver:
 
                 # Save the image based on format
                 if file_type == "exr":
-                    self._save_exr(img_np, out_path, save_as_grayscale, exr_compression)
+                    self._save_exr(img_np, out_path, save_as_grayscale, exr_compression, bit_depth)
                 elif file_type == "png":
                     self._save_png(img_np, out_path, bit_depth)
                 elif file_type in ["jpg", "jpeg", "webp"]:

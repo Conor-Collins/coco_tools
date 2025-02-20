@@ -26,14 +26,26 @@ python.exe -m pip install -r ./ComfyUI/custom_nodes/ComfyUI-CoCoTools/requiremen
 
 
 ## To-Do
+#### IO
 - [x] implement proper exr loading
 - [ ] implement EXR sequence loader
 - [x] implement exr saver for proper exr saving using OpenImageIO
-- [ ] implement minimal color management system
 - [ ] implement multilayer exr system ( render passes, aovs, embedded images, etc)
+
+#### Color
+- [x] split colorspace conversion into separate node
+- [x] implement minimal color management system
+- [ ] Add ACES or OCIO color config profiles into the conversion node
+
+
+#### Processing
 - [ ] create split frequency for video node
 - [ ] create some experimental frequency tools ( motion detection from frame offset seperation)
+
+#### Documentation
 - [ ] add more info on specific nodes
 - [ ] add more workflows to show how to use custom nodes
+- [] visual examples in the readme
 
+#### Registration
 - [ ] submit to ComfyUI Registry
