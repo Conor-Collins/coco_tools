@@ -31,6 +31,7 @@ python.exe -m pip install -r ./ComfyUI/custom_nodes/ComfyUI-CoCoTools/requiremen
 - [ ] implement EXR sequence loader
 - [x] implement exr saver for proper exr saving using OpenImageIO
 - [ ] implement multilayer exr system ( render passes, aovs, embedded images, etc)
+- [x] contextual menus from the file type picked on saver
 
 #### Color
 - [x] split colorspace conversion into separate node

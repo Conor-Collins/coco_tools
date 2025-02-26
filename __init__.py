@@ -14,10 +14,16 @@ from .modules.coco_frequency_separation import frequency_separation
 from .modules.coco_frequency_combine import frequency_combine
 from .modules.coco_znormalize import znormalize
 from .modules.coco_colorspace import colorspace
+from .modules.dynamic_widget_example import DynamicWidgetExample
 
 # Initialize node mappings
 NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
+
+# Explicitly set the web directory path relative to this file
+import os
+NODE_DIR = os.path.dirname(os.path.realpath(__file__))
+WEB_DIRECTORY = os.path.join(NODE_DIR, "web")
 
 # Add all node classes to the mappings
 NODE_CLASS_MAPPINGS.update({
@@ -36,7 +42,8 @@ NODE_CLASS_MAPPINGS.update({
     "RegexFindNode": regex_find,
     "frequency_separation": frequency_separation,
     "frequency_combine": frequency_combine,
-    "ColorspaceNode": colorspace
+    "ColorspaceNode": colorspace,
+    "DynamicWidgetExample": DynamicWidgetExample
 })
 
 # Add display names for better UI presentation
@@ -56,7 +63,8 @@ NODE_DISPLAY_NAME_MAPPINGS.update({
     "RegexFindNode": "Regex Find",
     "frequency_separation": "Frequency Separation",
     "frequency_combine": "Frequency Combine",
-    "ColorspaceNode": "Colorspace"
+    "ColorspaceNode": "Colorspace",
+    "DynamicWidgetExample": "Dynamic Widget Example"
 })
 
 # Expose what ComfyUI needs

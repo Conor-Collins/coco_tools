@@ -12,25 +12,28 @@ os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 import cv2 as cv
 
 class saver:
-
-    def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
-        self.type = "output"
-
+    """Image saver node with dynamic widget behavior"""
+    
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
+                # Common widgets that are always visible at the top
                 "images": ("IMAGE",),
                 "file_path": ("STRING", {"default": "ComfyUI"}),
-                "file_type": (["exr", "png", "jpg", "jpeg", "webp", "tiff"],),
-                "bit_depth": (["8", "16", "32"], {"default": "16"}),
-                "exr_compression": (["none", "zip", "zips", "rle", "pxr24", "b44", "b44a", "dwaa", "dwab"], {"default": "zips"}),
-                "quality": ("INT", {"default": 95, "min": 1, "max": 100}),
-                "save_as_grayscale": ("BOOLEAN", {"default": False}),
                 "version": ("INT", {"default": 1, "min": -1, "max": 999}),
                 "start_frame": ("INT", {"default": 1001, "min": 0, "max": 99999999}),
                 "frame_pad": ("INT", {"default": 4, "min": 1, "max": 8}),
+                
+                # This widget controls the visibility of others
+                "file_type": (["exr", "png", "jpg", "webp", "tiff"], {"default": "png"}),
+                
+                # These widgets will be shown/hidden based on file_type
+                "bit_depth": (["8", "16", "32"], {"default": "16"}),
+                "exr_compression": (["none", "zip", "zips", "rle", "pxr24", "b44", "b44a", "dwaa", "dwab"], 
+                                  {"default": "zips"}),
+                "quality": ("INT", {"default": 95, "min": 1, "max": 100}),
+                "save_as_grayscale": ("BOOLEAN", {"default": False})
             },
             "hidden": {
                 "prompt": "PROMPT",
@@ -42,6 +45,13 @@ class saver:
     FUNCTION = "save_images"
     OUTPUT_NODE = True
     CATEGORY = "COCO Tools/Savers"
+    
+    # This tells ComfyUI that file_type widget needs custom handling
+    CUSTOM_WIDGETS = ["file_type"]
+
+    def __init__(self):
+        self.output_dir = folder_paths.get_output_directory()
+        self.type = "output"
 
     @staticmethod
     def is_grayscale(image: np.ndarray) -> bool:
@@ -247,10 +257,10 @@ class saver:
                 dtype=np.float32
             )
 
-    def save_images(self, images: torch.Tensor, file_path: str, file_type: str, bit_depth: str,
-                   quality: int = 95, save_as_grayscale: bool = False,
-                   version: int = 1, start_frame: int = 1001, frame_pad: int = 4,
-                   prompt=None, extra_pnginfo=None, exr_compression: str = "zips") -> Dict:
+    def save_images(self, images, file_path, file_type, bit_depth,
+                   quality=95, save_as_grayscale=False,
+                   version=1, start_frame=1001, frame_pad=4,
+                   prompt=None, extra_pnginfo=None, exr_compression="zips"):
         """Save a batch of images in various formats with support for versioning and frame numbering."""
         try:
             bit_depth = int(bit_depth)
