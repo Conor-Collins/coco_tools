@@ -1,3 +1,3 @@
-import "./coco_saver.js";
-import "./coco_load_exr.js";
-import "./coco_shamble.js";
+import "./saver.js";
+import "./load_exr.js";
+import "./load_exr_layer_by_name.js";
