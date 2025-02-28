@@ -4,7 +4,7 @@ A set of custom nodes for ComfyUI providing advanced image processing, file hand
 
 ## Features
 - Image processing utilities
-- EXR image processing utilities
+- EXR image input and outputs nodes
 - JSON-based scaling tools for file/path management
 - Utility nodes for image and data operations
 
@@ -30,7 +30,7 @@ python.exe -m pip install -r ./ComfyUI/custom_nodes/ComfyUI-CoCoTools/requiremen
 - [x] implement proper exr loading
 - [ ] implement EXR sequence loader
 - [x] implement exr saver for proper exr saving using OpenImageIO
-- [ ] implement multilayer exr system ( render passes, aovs, embedded images, etc)
+- [x] implement multilayer exr system ( render passes, aovs, embedded images, etc)  (still testing - alpha)
 - [x] contextual menus from the file type picked on saver
 
 #### Color

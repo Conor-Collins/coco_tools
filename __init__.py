@@ -1,20 +1,20 @@
-from .modules.coco_zdepth import zdepth
-from .modules.coco_json_reader import JSON_SPEC_READER
-from .modules.coco_json_val_finder import json_value
-from .modules.coco_json import json
-from .modules.coco_noise import noise
-from .modules.coco_rand_int import rand_int
-from .modules.coco_regex_find import regex_find
-from .modules.coco_saver import saver
-from .modules.coco_split_three import split_threebands
-from .modules.coco_walk_folder import walk_folder
-from .modules.coco_load_exr import load_exr
-from .modules.coco_image_loader import coco_loader
-from .modules.coco_frequency_separation import frequency_separation
-from .modules.coco_frequency_combine import frequency_combine
-from .modules.coco_znormalize import znormalize
-from .modules.coco_colorspace import colorspace
-from .modules.dynamic_widget_example import DynamicWidgetExample
+from .modules.zdepth import zdepth
+from .modules.noise import noise
+from .modules.split_threebands import split_threebands
+from .modules.image_loader import coco_loader
+from .modules.load_exr import load_exr
+from .modules.walk_folder import walk_folder
+from .modules.saver import saver
+from .modules.json_reader import JSON_SPEC_READER
+from .modules.json_value import json_value
+from .modules.json import json
+from .modules.rand_int import rand_int
+from .modules.regex_find import regex_find
+from .modules.frequency_separation import frequency_separation
+from .modules.frequency_combine import frequency_combine
+from .modules.znormalize import znormalize
+from .modules.colorspace import colorspace
+from .modules.load_exr_layer_by_name import load_exr_layer_by_name, shamble_cryptomatte
 
 # Initialize node mappings
 NODE_CLASS_MAPPINGS = {}
@@ -23,16 +23,16 @@ NODE_DISPLAY_NAME_MAPPINGS = {}
 # Explicitly set the web directory path relative to this file
 import os
 NODE_DIR = os.path.dirname(os.path.realpath(__file__))
-WEB_DIRECTORY = os.path.join(NODE_DIR, "web")
+WEB_DIRECTORY = os.path.join(NODE_DIR, "js")
 
 # Add all node classes to the mappings
 NODE_CLASS_MAPPINGS.update({
     "ZDepthNode": zdepth,
-    "znormalize": znormalize,
+    "ZNormalizeNode": znormalize,
     "NoiseNode": noise,
-    "split_threebands": split_threebands,
-    "CocoImageLoader": coco_loader,
-    "LoadEXRNode": load_exr,  
+    "SplitThreeBandsNode": split_threebands,
+    "ImageLoader": coco_loader,
+    "LoadExr": load_exr,  
     "WalkFolderNode": walk_folder,
     "SaverNode": saver,
     "JSONReaderNode": JSON_SPEC_READER,
@@ -40,31 +40,33 @@ NODE_CLASS_MAPPINGS.update({
     "JSONNode": json,
     "RandomIntNode": rand_int,
     "RegexFindNode": regex_find,
-    "frequency_separation": frequency_separation,
-    "frequency_combine": frequency_combine,
+    "FrequencySeparation": frequency_separation,
+    "FrequencyCombine": frequency_combine,
     "ColorspaceNode": colorspace,
-    "DynamicWidgetExample": DynamicWidgetExample
+    "LoadExrLayerByName": load_exr_layer_by_name,
+    "CryptomatteLayer": shamble_cryptomatte
 })
 
 # Add display names for better UI presentation
 NODE_DISPLAY_NAME_MAPPINGS.update({
-    "ZDepthNode": "Z-Depth Reader",
-    "znormalize": "znormalize",
-    "NoiseNode": "Generate Noise",
-    "split_threebands": "Split into Three Bands",
-    "CocoImageLoader": "Image Loader (Multi-Format)",
-    "LoadEXRNode": "Load EXR Image",  
+    "ZDepthNode": "Z Depth",
+    "ZNormalizeNode": "Z Normalize",
+    "NoiseNode": "Noise Generator",
+    "SplitThreeBandsNode": "Split 3 Bands",
+    "ImageLoader": "Image Loader",
+    "LoadExr": "Load EXR", 
     "WalkFolderNode": "Walk Folder",
     "SaverNode": "Save Image",
     "JSONReaderNode": "JSON Reader",
     "JSONValueFinderNode": "JSON Value Finder",
-    "JSONNode": "JSON Operations",
-    "RandomIntNode": "Random Integer",
+    "JSONNode": "JSON",
+    "RandomIntNode": "Random Int",
     "RegexFindNode": "Regex Find",
-    "frequency_separation": "Frequency Separation",
-    "frequency_combine": "Frequency Combine",
+    "FrequencySeparation": "Frequency Separation",
+    "FrequencyCombine": "Frequency Combine",
     "ColorspaceNode": "Colorspace",
-    "DynamicWidgetExample": "Dynamic Widget Example"
+    "LoadExrLayerByName": "Load EXR Layer by Name",
+    "CryptomatteLayer": "Cryptomatte Layer"
 })
 
 # Expose what ComfyUI needs
