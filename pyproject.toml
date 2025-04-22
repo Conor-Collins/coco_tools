@@ -1,0 +1,15 @@
+[project]
+name = "coco_tools"
+description = "A set of custom nodes for ComfyUI providing advanced image processing, file handling, and utility functions."
+version = "1.0.0"
+license = {file = "LICENSE"}
+dependencies = ["# Core Machine Learning and Numerical Computing", "torch>=1.10.0", "torchvision>=0.11.0", "numpy>=1.21.0", "scipy>=1.7.0", "# Image Processing", "Pillow>=9.0.0", "opencv-python>=4.5.0", "scikit-image>=0.19.0", "tifffile", "OpenEXR", "Imath", "# JSON and File Handling", "jsonschema", "# Noise Generation", "opensimplex>=0.4.0", "# Optional: Logging and Debugging", "rich>=10.0.0"]
+
+[project.urls]
+Repository = "https://github.com/Conor-Collins/coco_tools"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = ""
+DisplayName = "coco_tools"
+Icon = ""
