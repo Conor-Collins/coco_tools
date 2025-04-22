@@ -1,4 +1,6 @@
-# ComfyUI-CoCoTools
+# ComfyUI-CoCoTools (DEPRECATED)
+
+**⚠️ DEPRECATED: This repository is no longer maintained. Please use [ComfyUI-CoCoTools_IO](https://github.com/Conor-Collins/ComfyUI-CoCoTools_IO) for the IP module and future updates.**
 
 A set of custom nodes for ComfyUI providing advanced image processing, file handling, and utility functions.
 
